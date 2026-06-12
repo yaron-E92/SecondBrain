@@ -5,4 +5,5 @@
   <Folder Name="/src/Infrastructure/" />
   <Folder Name="/src/Presentation/" />
   <Folder Name="/tests/" />
+  <Project Path="SecondBrain.Abstractions/SecondBrain.Abstractions.csproj" Id="36b4a63b-17a4-45ca-b122-4568a9511f98" />
 </Solution>
