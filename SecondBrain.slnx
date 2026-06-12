@@ -3,6 +3,8 @@
   <Project Path="SecondBrain.Abstractions/SecondBrain.Abstractions.csproj" Id="36b4a63b-17a4-45ca-b122-4568a9511f98" />
   <Project Path="SecondBrain.Application/SecondBrain.Application.csproj" />
   <Project Path="SecondBrain.Domain/SecondBrain.Domain.csproj" Id="8ad671e7-c9fa-49cc-a5a2-9dfd051b9649" />
+  <Project Path="SecondBrain.Persistence/SecondBrain.Persistence.csproj" />
   <Project Path="tests/SecondBrain.Application.Tests/SecondBrain.Application.Tests.csproj" />
   <Project Path="tests/SecondBrain.Domain.Tests/SecondBrain.Domain.Tests.csproj" />
+  <Project Path="tests/SecondBrain.Persistence.Tests/SecondBrain.Persistence.Tests.csproj" />
 </Solution>
