@@ -1,5 +1,7 @@
 ﻿namespace SecondBrain.Abstractions.Permissions;
 
-public class SecondBrainModulePermission
-{
-}
+public sealed record SecondBrainModulePermission(
+    string Key,
+    string DisplayName,
+    string Description,
+    bool IsEnabledByDefault);
