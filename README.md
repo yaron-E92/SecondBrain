@@ -19,21 +19,19 @@ pattern. Test projects use `SecondBrain.<Area>.Tests` and remain under `tests/`.
 Concrete Brain projects, UI applications, and optional modules are added only by
 their dedicated roadmap issues.
 
-`Directory.Build.props` provides shared framework, nullable-reference-type, and implicit-using defaults.
+The root `global.json` pins the .NET 10 SDK, while `Directory.Build.props`
+provides shared framework, nullable-reference-type, and implicit-using defaults.
 
-## Continuous integration
+## MAUI shell
 
-GitHub Actions validates pull requests and pushes to `main` on
-`ubuntu-latest`. The workflow installs the SDK selected by `global.json`, then
-runs the following solution-level commands as separate steps:
+`SecondBrain.App` is the MAUI presentation and composition-root project. The
+local development target is Android on .NET 10, so install or restore the MAUI
+Android workload before building the app. When using the repo automation VM,
+the Android SDK and JDK are resolved from `$DOTNET_ROOT/android-sdk` and
+`$DOTNET_ROOT/android-jdk`.
 
 ```bash
-dotnet restore SecondBrain.slnx
-dotnet build SecondBrain.slnx --configuration Release --no-restore
-dotnet test SecondBrain.slnx --configuration Release --no-build --no-restore
+dotnet workload restore SecondBrain.App/SecondBrain.App.csproj
+dotnet restore SecondBrain.App/SecondBrain.App.csproj
+dotnet build SecondBrain.App/SecondBrain.App.csproj --no-restore
 ```
-
-These commands include configured analyzers and architecture or test projects
-that belong to the solution. The baseline CI job does not install MAUI workloads
-or build device-specific targets; those require explicitly supported platform
-runners and remain outside this solution-level check.
