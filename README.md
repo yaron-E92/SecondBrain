@@ -19,8 +19,28 @@ pattern. Test projects use `SecondBrain.<Area>.Tests` and remain under `tests/`.
 Concrete Brain projects, UI applications, and optional modules are added only by
 their dedicated roadmap issues.
 
-The root `global.json` pins the .NET 10 SDK, while `Directory.Build.props`
-provides shared framework, nullable-reference-type, and implicit-using defaults.
+The root `global.json` selects the .NET 10.0.200 SDK feature band and uses
+`latestPatch` roll-forward. This allows the latest installed 10.0.2xx servicing
+release, rejects later feature bands, and excludes prerelease SDKs. CI reads the
+same file, so local and CI SDK selection follow one policy.
+`Directory.Build.props` provides shared framework, nullable-reference-type, and
+implicit-using defaults.
+
+Install a stable .NET 10.0.2xx SDK, then confirm the selected SDK and policy from
+the repository root:
+
+```bash
+dotnet --info
+```
+
+The output should identify a 10.0.2xx SDK and list this repository's
+`global.json`. Run the standard solution checks with:
+
+```bash
+dotnet restore SecondBrain.slnx
+dotnet build SecondBrain.slnx --configuration Debug --no-restore
+dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore
+```
 
 ## MAUI shell
 

@@ -16,9 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  DOTNET_VERSION: '10.0.x'
-
 jobs:
   build-and-test:
     name: Restore, build, and test
@@ -34,7 +31,7 @@ jobs:
         id: setup-dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
 
       - name: Restore cached .NET workloads
         id: restore-dotnet-workloads
