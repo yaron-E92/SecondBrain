@@ -19,7 +19,9 @@ to enable that module and allow it to access data.
 Optional modules ship compiled into SecondBrain so a supported distribution can
 offer an integrated experience without installing module code after release.
 Compile-time inclusion does not enable a module at runtime. Every optional
-module remains disabled until the user explicitly opts in.
+module remains disabled until the user explicitly opts in. Before opt-in, the
+module must not expose its features, begin background processing, or access
+module-specific user data.
 
 `Brain.Abstractions`, represented in this repository by
 `SecondBrain.Abstractions`, is the dependency boundary between the host and
@@ -57,7 +59,7 @@ decision.
 - The host and modules must maintain compatibility with shared abstraction
   contracts.
 - Independent composition roots create additional build, test, and release
-  combinations to support.
+  combinations to support and can drift unless both paths are tested.
 - Runtime enablement, permissions, and data isolation require infrastructure
   beyond compile-time module inclusion.
 
@@ -99,8 +101,11 @@ dependency boundary established here.
 
 - How modules register with the SecondBrain composition root.
 - How opt-in state, feature availability, and module lifecycle are represented
-  and persisted.
-- How consent, permissions, privacy boundaries, and data sharing are enforced.
+  and persisted, revoked, and audited.
+- How consent, permissions, privacy boundaries, data ownership, isolation,
+  deletion, and sharing are enforced.
 - How abstraction contract compatibility and versioning are managed.
+- Which repository and package boundaries are used for shared contracts and
+  concrete modules.
 - Which packaging and deployment mechanisms each platform and distribution use.
 - Which automated checks validate dependency direction and standalone builds.
