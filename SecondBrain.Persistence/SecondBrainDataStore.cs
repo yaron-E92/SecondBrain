@@ -6,14 +6,6 @@ using SecondBrain.Domain.ValueObjects;
 
 namespace SecondBrain.Persistence;
 
-public sealed record SecondBrainDataSnapshot(
-    IReadOnlyList<Project> Projects,
-    IReadOnlyList<Area> Areas,
-    IReadOnlyList<ResourceTopic> ResourceTopics,
-    IReadOnlyList<Tag> Tags,
-    IReadOnlyList<BrainItem> BrainItems,
-    IReadOnlyList<Journal> Journals);
-
 public sealed class SecondBrainDataStore(SecondBrainDbContext context)
 {
     public async Task ReplaceAsync(
