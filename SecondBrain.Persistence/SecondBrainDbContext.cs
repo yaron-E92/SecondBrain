@@ -1,10 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace SecondBrain.Persistence;
 
 public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> options)
     : DbContext(options)
 {
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ConfigureWarnings(warnings =>
+            warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+    }
+
     internal DbSet<ProjectRow> Projects => Set<ProjectRow>();
 
     internal DbSet<AreaRow> Areas => Set<AreaRow>();
