@@ -3,25 +3,6 @@ using SecondBrain.Domain.ValueObjects;
 
 namespace SecondBrain.Domain.Entities;
 
-public enum BrainItemKind
-{
-    Note = 1,
-    Idea = 2,
-    JournalEntry = 3,
-}
-
-public enum NoteKind
-{
-    General = 1,
-}
-
-public enum IdeaMaturity
-{
-    Captured = 1,
-    Sharpened = 2,
-    Actionable = 3,
-}
-
 public sealed class BrainItem
 {
     private readonly List<SecondBrainItemId> _contextualLinks;
