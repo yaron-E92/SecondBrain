@@ -224,6 +224,159 @@ public sealed class BrainItemsTests
         Assert.That(entry.IsArchived, Is.False);
     }
 
+    [TestCase(CaptureSourceType.Article, "https://example.com/article")]
+    [TestCase(CaptureSourceType.Video, "https://example.com/video")]
+    [TestCase(CaptureSourceType.Course, "https://example.com/course")]
+    [TestCase(CaptureSourceType.Podcast, "https://example.com/podcast")]
+    [TestCase(CaptureSourceType.Page, "https://example.com/page")]
+    [TestCase(CaptureSourceType.File, "file:///C:/captures/source.pdf")]
+    public void KnowledgeCapture_RetainsSourceProvenance(
+        CaptureSourceType sourceType,
+        string sourceUrl)
+    {
+        var reminderAt = CreatedAt.AddDays(1);
+        var capture = CreateCapture(
+            sourceType: sourceType,
+            sourceUri: new Uri(sourceUrl),
+            reminderAt: reminderAt);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(capture.Kind, Is.EqualTo(BrainItemKind.KnowledgeCapture));
+            Assert.That(capture.CaptureSourceType, Is.EqualTo(sourceType));
+            Assert.That(capture.SourceUri, Is.EqualTo(new Uri(sourceUrl)));
+            Assert.That(capture.SourceCitation, Is.EqualTo("Example citation"));
+            Assert.That(capture.ReminderAt, Is.EqualTo(reminderAt));
+            Assert.That(
+                capture.CaptureProcessingState,
+                Is.EqualTo(CaptureProcessingState.Captured));
+            Assert.That(capture.NoteKind, Is.Null);
+        });
+    }
+
+    [Test]
+    public void KnowledgeCapture_AdvancesToDistilledOrReferenced()
+    {
+        var distilled = CreateCapture();
+        var referenced = CreateCapture();
+
+        distilled.StartConsuming();
+        distilled.MarkDistilled();
+        referenced.StartConsuming();
+        referenced.MarkReferenced();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                distilled.CaptureProcessingState,
+                Is.EqualTo(CaptureProcessingState.Distilled));
+            Assert.That(
+                referenced.CaptureProcessingState,
+                Is.EqualTo(CaptureProcessingState.Referenced));
+        });
+    }
+
+    [Test]
+    public void KnowledgeCapture_InvalidTransitionsFailPredictably()
+    {
+        var capture = CreateCapture();
+        var note = CreateItem(BrainItemKind.Note, noteKind: NoteKind.General);
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<InvalidOperationException>(capture.MarkDistilled);
+            Assert.Throws<InvalidOperationException>(capture.MarkReferenced);
+            Assert.Throws<InvalidOperationException>(note.StartConsuming);
+        });
+
+        capture.StartConsuming();
+
+        Assert.Throws<InvalidOperationException>(capture.StartConsuming);
+
+        capture.MarkDistilled();
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<InvalidOperationException>(capture.MarkDistilled);
+            Assert.Throws<InvalidOperationException>(capture.MarkReferenced);
+        });
+
+        capture.Archive();
+
+        Assert.Throws<InvalidOperationException>(capture.StartConsuming);
+    }
+
+    [Test]
+    public void KnowledgeCapture_InvalidSourceMetadataFailsPredictably()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateItem(
+                    BrainItemKind.KnowledgeCapture,
+                    sourceUri: new Uri("https://example.com"),
+                    sourceCitation: "Citation",
+                    captureProcessingState: CaptureProcessingState.Captured));
+            Assert.Throws<ArgumentException>(
+                () => CreateItem(
+                    BrainItemKind.KnowledgeCapture,
+                    captureSourceType: CaptureSourceType.Article,
+                    sourceCitation: "Citation",
+                    captureProcessingState: CaptureProcessingState.Captured));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateCapture(sourceType: (CaptureSourceType)99));
+            Assert.Throws<ArgumentException>(
+                () => CreateCapture(sourceUri: new Uri("relative", UriKind.Relative)));
+            Assert.Throws<ArgumentException>(
+                () => CreateCapture(sourceUri: new Uri("ftp://example.com/source")));
+            Assert.Throws<ArgumentException>(
+                () => CreateCapture(
+                    sourceType: CaptureSourceType.File,
+                    sourceUri: new Uri("https://example.com/source.pdf")));
+            Assert.Throws<ArgumentException>(
+                () => CreateCapture(sourceCitation: " "));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateCapture(reminderAt: CreatedAt.AddTicks(-1)));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateCapture(
+                    processingState: (CaptureProcessingState)99));
+            Assert.Throws<ArgumentException>(
+                () => CreateItem(
+                    BrainItemKind.Note,
+                    noteKind: NoteKind.General,
+                    captureSourceType: CaptureSourceType.Article,
+                    sourceUri: new Uri("https://example.com")));
+        });
+    }
+
+    [Test]
+    public void KnowledgeCapture_LinksDerivedItemsAndPreservesThemWhenArchived()
+    {
+        var derivedItemId = SecondBrainItemId.New();
+        var capture = CreateCapture(derivedItemLinks: new[] { derivedItemId });
+        var anotherDerivedItemId = SecondBrainItemId.New();
+
+        capture.AddDerivedItemLink(anotherDerivedItemId);
+        capture.Archive();
+
+        Assert.That(
+            capture.DerivedItemLinks,
+            Is.EqualTo(new[] { derivedItemId, anotherDerivedItemId }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(capture.SourceCitation, Is.EqualTo("Example citation"));
+            Assert.Throws<ArgumentException>(
+                () => CreateCapture(
+                    id: derivedItemId,
+                    derivedItemLinks: new[] { derivedItemId }));
+            Assert.Throws<InvalidOperationException>(
+                () => CreateCapture(
+                    derivedItemLinks: new[] { derivedItemId, derivedItemId }));
+            Assert.Throws<InvalidOperationException>(
+                () => capture.AddDerivedItemLink(SecondBrainItemId.New()));
+        });
+    }
+
     private static BrainItem CreateItem(
         BrainItemKind kind,
         SecondBrainItemId? id = null,
@@ -232,7 +385,13 @@ public sealed class BrainItemsTests
         IdeaMaturity? ideaMaturity = null,
         DateOnly? entryDate = null,
         IEnumerable<string>? tags = null,
-        IEnumerable<SecondBrainItemId>? contextualLinks = null) =>
+        IEnumerable<SecondBrainItemId>? contextualLinks = null,
+        CaptureSourceType? captureSourceType = null,
+        Uri? sourceUri = null,
+        string? sourceCitation = null,
+        DateTimeOffset? reminderAt = null,
+        CaptureProcessingState? captureProcessingState = null,
+        IEnumerable<SecondBrainItemId>? derivedItemLinks = null) =>
         new(
             id ?? SecondBrainItemId.New(),
             kind,
@@ -244,5 +403,29 @@ public sealed class BrainItemsTests
             ideaMaturity,
             entryDate,
             tags,
-            contextualLinks);
+            contextualLinks,
+            captureSourceType: captureSourceType,
+            sourceUri: sourceUri,
+            sourceCitation: sourceCitation,
+            reminderAt: reminderAt,
+            captureProcessingState: captureProcessingState,
+            derivedItemLinks: derivedItemLinks);
+
+    private static BrainItem CreateCapture(
+        SecondBrainItemId? id = null,
+        CaptureSourceType sourceType = CaptureSourceType.Article,
+        Uri? sourceUri = null,
+        string sourceCitation = " Example citation ",
+        DateTimeOffset? reminderAt = null,
+        CaptureProcessingState processingState = CaptureProcessingState.Captured,
+        IEnumerable<SecondBrainItemId>? derivedItemLinks = null) =>
+        CreateItem(
+            BrainItemKind.KnowledgeCapture,
+            id: id,
+            captureSourceType: sourceType,
+            sourceUri: sourceUri ?? new Uri("https://example.com/source"),
+            sourceCitation: sourceCitation,
+            reminderAt: reminderAt,
+            captureProcessingState: processingState,
+            derivedItemLinks: derivedItemLinks);
 }
