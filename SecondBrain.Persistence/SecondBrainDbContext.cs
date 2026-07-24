@@ -123,11 +123,11 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
             table.HasCheckConstraint("CK_BrainItems_Timestamps", "UpdatedAt >= CreatedAt");
             table.HasCheckConstraint(
                 "CK_BrainItems_Lifecycle",
-                "(Kind = 1 AND NoteKind = 1 AND IdeaMaturity IS NULL AND EntryDate IS NULL AND CaptureSourceType IS NULL AND SourceUri IS NULL AND SourceCitation IS NULL AND ReminderAt IS NULL AND CaptureProcessingState IS NULL AND ResourceArtifactKind IS NULL AND ResourceFreshness IS NULL AND ReviewDate IS NULL) OR " +
+                "COALESCE((Kind = 1 AND NoteKind = 1 AND IdeaMaturity IS NULL AND EntryDate IS NULL AND CaptureSourceType IS NULL AND SourceUri IS NULL AND SourceCitation IS NULL AND ReminderAt IS NULL AND CaptureProcessingState IS NULL AND ResourceArtifactKind IS NULL AND ResourceFreshness IS NULL AND ReviewDate IS NULL) OR " +
                 "(Kind = 2 AND NoteKind IS NULL AND IdeaMaturity BETWEEN 1 AND 3 AND EntryDate IS NULL AND CaptureSourceType IS NULL AND SourceUri IS NULL AND SourceCitation IS NULL AND ReminderAt IS NULL AND CaptureProcessingState IS NULL AND ResourceArtifactKind IS NULL AND ResourceFreshness IS NULL AND ReviewDate IS NULL) OR " +
                 "(Kind = 3 AND NoteKind IS NULL AND IdeaMaturity IS NULL AND EntryDate IS NOT NULL AND CaptureSourceType IS NULL AND SourceUri IS NULL AND SourceCitation IS NULL AND ReminderAt IS NULL AND CaptureProcessingState IS NULL AND ResourceArtifactKind IS NULL AND ResourceFreshness IS NULL AND ReviewDate IS NULL) OR " +
                 "(Kind = 4 AND NoteKind IS NULL AND IdeaMaturity IS NULL AND EntryDate IS NULL AND CaptureSourceType BETWEEN 1 AND 6 AND length(trim(SourceUri)) > 0 AND length(trim(SourceCitation)) > 0 AND (ReminderAt IS NULL OR ReminderAt >= CreatedAt) AND CaptureProcessingState BETWEEN 1 AND 4 AND ResourceArtifactKind IS NULL AND ResourceFreshness IS NULL AND ReviewDate IS NULL) OR " +
-                "(Kind = 5 AND NoteKind IS NULL AND IdeaMaturity IS NULL AND EntryDate IS NULL AND CaptureSourceType IS NULL AND SourceUri IS NULL AND SourceCitation IS NULL AND ReminderAt IS NULL AND CaptureProcessingState IS NULL AND ResourceArtifactKind BETWEEN 1 AND 4 AND ResourceFreshness BETWEEN 1 AND 3)");
+                "(Kind = 5 AND NoteKind IS NULL AND IdeaMaturity IS NULL AND EntryDate IS NULL AND CaptureSourceType IS NULL AND SourceUri IS NULL AND SourceCitation IS NULL AND ReminderAt IS NULL AND CaptureProcessingState IS NULL AND ResourceArtifactKind BETWEEN 1 AND 4 AND ResourceFreshness BETWEEN 1 AND 3), 0)");
         });
         entity.HasKey(row => row.Id);
         entity.Property(row => row.Id).ValueGeneratedNever();
