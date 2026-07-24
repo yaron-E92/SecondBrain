@@ -140,7 +140,7 @@ public sealed partial class NotionMigrationSpecificationTests
             .ToArray();
 
         Assert.That(ids, Is.Not.Empty);
-        Assert.That(ids, Has.All.Matches<string>(NotionIdPattern()));
+        Assert.That(ids, Has.All.Matches<string>(id => NotionIdPattern().IsMatch(id)));
     }
 
     private static string FindRepositoryRoot()
