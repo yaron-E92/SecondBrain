@@ -19,3 +19,4 @@ Each ADR uses the following sections:
 ## Decisions
 
 - [ADR 0001: Modular app family strategy](0001-modular-app-family-strategy.md) - Accepted
+- [ADR 0002: PARA knowledge model and ownership boundaries](0002-para-knowledge-model-and-ownership-boundaries.md) - Accepted
