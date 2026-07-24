@@ -377,6 +377,124 @@ public sealed class BrainItemsTests
         });
     }
 
+    [Test]
+    public void ResourceArtifact_RetainsFormatReviewDateAndOptionalManyToManyProvenance()
+    {
+        var reviewDate = new DateOnly(2026, 8, 24);
+        var capture = CreateCapture();
+        var note = CreateItem(BrainItemKind.Note, noteKind: NoteKind.General);
+        var sourceResource = CreateResource(ResourceArtifactKind.Guide);
+        var fromScratch = CreateResource(ResourceArtifactKind.Checklist);
+        var derived = CreateResource(
+            ResourceArtifactKind.CheatSheet,
+            reviewDate: reviewDate,
+            provenanceSources: new[] { capture, note, sourceResource });
+        var anotherDerived = CreateResource(
+            ResourceArtifactKind.Template,
+            provenanceSources: new[] { capture });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                fromScratch.ProvenanceSourceLinks,
+                Is.Empty);
+            Assert.That(
+                derived.ResourceArtifactKind,
+                Is.EqualTo(ResourceArtifactKind.CheatSheet));
+            Assert.That(
+                derived.ResourceFreshness,
+                Is.EqualTo(ResourceFreshness.Draft));
+            Assert.That(derived.ReviewDate, Is.EqualTo(reviewDate));
+            Assert.That(
+                derived.ProvenanceSourceLinks,
+                Is.EqualTo(new[] { capture.Id, note.Id, sourceResource.Id }));
+            Assert.That(
+                anotherDerived.ProvenanceSourceLinks,
+                Is.EqualTo(new[] { capture.Id }));
+        });
+    }
+
+    [Test]
+    public void ResourceArtifact_TransitionsFreshnessIndependentlyFromArchive()
+    {
+        var resource = CreateResource(ResourceArtifactKind.Guide);
+        var activeOutdated = CreateResource(ResourceArtifactKind.Template);
+
+        Assert.Throws<InvalidOperationException>(resource.MarkResourceOutdated);
+
+        resource.MarkResourceCurrent();
+        resource.MarkResourceOutdated();
+        resource.MarkResourceCurrent();
+        resource.Archive();
+
+        activeOutdated.MarkResourceCurrent();
+        activeOutdated.MarkResourceOutdated();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resource.ResourceFreshness, Is.EqualTo(ResourceFreshness.Current));
+            Assert.That(resource.IsArchived, Is.True);
+            Assert.That(
+                activeOutdated.ResourceFreshness,
+                Is.EqualTo(ResourceFreshness.Outdated));
+            Assert.That(activeOutdated.IsArchived, Is.False);
+            Assert.Throws<InvalidOperationException>(resource.MarkResourceOutdated);
+            Assert.Throws<InvalidOperationException>(resource.MarkResourceCurrent);
+        });
+    }
+
+    [Test]
+    public void ResourceArtifact_RejectsDuplicateAndCyclicProvenance()
+    {
+        var first = CreateResource(ResourceArtifactKind.Guide);
+        var second = CreateResource(ResourceArtifactKind.Template);
+        var third = CreateResource(ResourceArtifactKind.Checklist);
+        var note = CreateItem(BrainItemKind.Note, noteKind: NoteKind.General);
+
+        first.AddProvenanceSource(second);
+        second.AddProvenanceSource(third);
+        first.AddProvenanceSource(note);
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<ArgumentException>(() => first.AddProvenanceSource(first));
+            Assert.Throws<InvalidOperationException>(
+                () => first.AddProvenanceSource(note));
+            Assert.Throws<InvalidOperationException>(
+                () => third.AddProvenanceSource(first));
+        });
+    }
+
+    [Test]
+    public void ResourceArtifact_InvalidMetadataAndProvenanceFailPredictably()
+    {
+        var idea = CreateItem(
+            BrainItemKind.Idea,
+            ideaMaturity: IdeaMaturity.Captured);
+        var resource = CreateResource(ResourceArtifactKind.Guide);
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateItem(
+                    BrainItemKind.ResourceArtifact,
+                    resourceFreshness: ResourceFreshness.Draft));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateResource((ResourceArtifactKind)99));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => CreateResource(
+                    ResourceArtifactKind.Guide,
+                    freshness: (ResourceFreshness)99));
+            Assert.Throws<ArgumentException>(
+                () => CreateResource(
+                    ResourceArtifactKind.Guide,
+                    noteKind: NoteKind.General));
+            Assert.Throws<ArgumentException>(
+                () => resource.AddProvenanceSource(idea));
+            Assert.Throws<InvalidOperationException>(idea.MarkResourceCurrent);
+        });
+    }
+
     private static BrainItem CreateItem(
         BrainItemKind kind,
         SecondBrainItemId? id = null,
@@ -391,7 +509,11 @@ public sealed class BrainItemsTests
         string? sourceCitation = null,
         DateTimeOffset? reminderAt = null,
         CaptureProcessingState? captureProcessingState = null,
-        IEnumerable<SecondBrainItemId>? derivedItemLinks = null) =>
+        IEnumerable<SecondBrainItemId>? derivedItemLinks = null,
+        ResourceArtifactKind? resourceArtifactKind = null,
+        ResourceFreshness? resourceFreshness = null,
+        DateOnly? reviewDate = null,
+        IEnumerable<BrainItem>? provenanceSources = null) =>
         new(
             id ?? SecondBrainItemId.New(),
             kind,
@@ -409,7 +531,11 @@ public sealed class BrainItemsTests
             sourceCitation: sourceCitation,
             reminderAt: reminderAt,
             captureProcessingState: captureProcessingState,
-            derivedItemLinks: derivedItemLinks);
+            derivedItemLinks: derivedItemLinks,
+            resourceArtifactKind: resourceArtifactKind,
+            resourceFreshness: resourceFreshness,
+            reviewDate: reviewDate,
+            provenanceSources: provenanceSources);
 
     private static BrainItem CreateCapture(
         SecondBrainItemId? id = null,
@@ -428,4 +554,18 @@ public sealed class BrainItemsTests
             reminderAt: reminderAt,
             captureProcessingState: processingState,
             derivedItemLinks: derivedItemLinks);
+
+    private static BrainItem CreateResource(
+        ResourceArtifactKind kind,
+        ResourceFreshness freshness = ResourceFreshness.Draft,
+        DateOnly? reviewDate = null,
+        IEnumerable<BrainItem>? provenanceSources = null,
+        NoteKind? noteKind = null) =>
+        CreateItem(
+            BrainItemKind.ResourceArtifact,
+            noteKind: noteKind,
+            resourceArtifactKind: kind,
+            resourceFreshness: freshness,
+            reviewDate: reviewDate,
+            provenanceSources: provenanceSources);
 }

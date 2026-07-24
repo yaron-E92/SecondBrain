@@ -6,4 +6,5 @@ public enum BrainItemKind
     Idea = 2,
     JournalEntry = 3,
     KnowledgeCapture = 4,
+    ResourceArtifact = 5,
 }
