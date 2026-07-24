@@ -23,8 +23,10 @@ The root `global.json` selects the .NET 10.0.200 SDK feature band and uses
 `latestPatch` roll-forward. This allows the latest installed 10.0.2xx servicing
 release, rejects later feature bands, and excludes prerelease SDKs. CI reads the
 same file, so local and CI SDK selection follow one policy.
-`Directory.Build.props` provides shared framework, nullable-reference-type, and
-implicit-using defaults.
+`Directory.Build.props` provides shared framework and C# defaults. Repository
+projects inherit nullable reference types, implicit usings, C# 14, the .NET 10
+analyzer baseline, build-time code-style enforcement, and warnings as errors.
+The root `.editorconfig` defines the formatting and naming conventions.
 
 Install a stable .NET 10.0.2xx SDK, then confirm the selected SDK and policy from
 the repository root:
@@ -41,6 +43,24 @@ dotnet restore SecondBrain.slnx
 dotnet build SecondBrain.slnx --configuration Debug --no-restore
 dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore
 ```
+
+Format the solution explicitly with:
+
+```bash
+dotnet format SecondBrain.slnx --no-restore
+```
+
+Verify formatting and analyzer rules without changing files with:
+
+```bash
+dotnet format SecondBrain.slnx --verify-no-changes --no-restore
+```
+
+Run the verification command after restore. Build warnings fail the build so
+new violations are actionable. If an imported module cannot adopt a diagnostic
+immediately, scope the exception to that module in its project file with
+`WarningsNotAsErrors`, or to its path and diagnostic ID in `.editorconfig`.
+Do not weaken the solution-wide policy for a module-specific exception.
 
 ## MAUI shell
 
