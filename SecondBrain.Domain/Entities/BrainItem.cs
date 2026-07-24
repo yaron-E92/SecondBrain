@@ -12,6 +12,10 @@ public sealed class BrainItem
     private readonly List<SecondBrainItemId> _provenanceSourceLinks;
     private readonly ReadOnlyCollection<SecondBrainItemId> _readOnlyProvenanceSourceLinks;
     private readonly List<BrainItem> _resourceProvenanceSources;
+    private readonly List<TagId> _tagIds;
+    private readonly ReadOnlyCollection<TagId> _readOnlyTagIds;
+    private readonly List<BrainItemLink> _links;
+    private readonly ReadOnlyCollection<BrainItemLink> _readOnlyLinks;
 
     public BrainItem(
         SecondBrainItemId id,
@@ -35,7 +39,9 @@ public sealed class BrainItem
         ResourceArtifactKind? resourceArtifactKind = null,
         ResourceFreshness? resourceFreshness = null,
         DateOnly? reviewDate = null,
-        IEnumerable<BrainItem>? provenanceSources = null)
+        IEnumerable<BrainItem>? provenanceSources = null,
+        IEnumerable<TagId>? tagIds = null,
+        IEnumerable<BrainItemLink>? links = null)
     {
         if (id.Value == Guid.Empty)
         {
@@ -106,6 +112,22 @@ public sealed class BrainItem
         ReviewDate = reviewDate;
         Tags = Array.AsReadOnly(NormalizeTags(tags).ToArray());
 
+        _tagIds = [];
+        foreach (var tagId in tagIds ?? [])
+        {
+            AddTagCore(tagId);
+        }
+
+        _readOnlyTagIds = _tagIds.AsReadOnly();
+
+        _links = [];
+        foreach (var link in links ?? [])
+        {
+            AddLinkCore(link);
+        }
+
+        _readOnlyLinks = _links.AsReadOnly();
+
         _contextualLinks = [];
         foreach (var link in contextualLinks ?? [])
         {
@@ -170,6 +192,10 @@ public sealed class BrainItem
 
     public IReadOnlyCollection<string> Tags { get; }
 
+    public IReadOnlyCollection<TagId> TagIds => _readOnlyTagIds;
+
+    public IReadOnlyCollection<BrainItemLink> Links => _readOnlyLinks;
+
     public IReadOnlyCollection<SecondBrainItemId> ContextualLinks =>
         _readOnlyContextualLinks;
 
@@ -180,6 +206,8 @@ public sealed class BrainItem
         _readOnlyProvenanceSourceLinks;
 
     public bool IsArchived { get; private set; }
+
+    public bool IsFavorite { get; private set; }
 
     public void Sharpen()
     {
@@ -199,6 +227,42 @@ public sealed class BrainItem
     {
         EnsureActive();
         AddContextualLinkCore(linkedItemId);
+    }
+
+    public void AddTag(TagId tagId)
+    {
+        EnsureActive();
+        AddTagCore(tagId);
+    }
+
+    public void AddLink(BrainItemLink link)
+    {
+        EnsureActive();
+        AddLinkCore(link);
+    }
+
+    public void MarkFavorite()
+    {
+        EnsureActive();
+
+        if (IsFavorite)
+        {
+            throw new InvalidOperationException("Brain item is already a favorite.");
+        }
+
+        IsFavorite = true;
+    }
+
+    public void UnmarkFavorite()
+    {
+        EnsureActive();
+
+        if (!IsFavorite)
+        {
+            throw new InvalidOperationException("Brain item is not a favorite.");
+        }
+
+        IsFavorite = false;
     }
 
     public void StartConsuming()
@@ -538,6 +602,33 @@ public sealed class BrainItem
         }
 
         return normalizedTags;
+    }
+
+    private void AddTagCore(TagId tagId)
+    {
+        if (tagId.Value == Guid.Empty)
+        {
+            throw new ArgumentException("Tag ID cannot be empty.", nameof(tagId));
+        }
+
+        if (_tagIds.Contains(tagId))
+        {
+            throw new InvalidOperationException("Tag already exists on this Brain item.");
+        }
+
+        _tagIds.Add(tagId);
+    }
+
+    private void AddLinkCore(BrainItemLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+
+        if (_links.Any(existing => existing.Id == link.Id))
+        {
+            throw new InvalidOperationException("Brain item link already exists.");
+        }
+
+        _links.Add(link);
     }
 
     private void AddContextualLinkCore(SecondBrainItemId linkedItemId)
