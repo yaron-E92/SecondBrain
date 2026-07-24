@@ -50,17 +50,18 @@ Format the solution explicitly with:
 dotnet format SecondBrain.slnx --no-restore
 ```
 
-Verify formatting and analyzer rules without changing files with:
+Verify whitespace formatting without changing files with:
 
 ```bash
-dotnet format SecondBrain.slnx --verify-no-changes --no-restore
+dotnet format SecondBrain.slnx whitespace --verify-no-changes --no-restore
 ```
 
-Run the verification command after restore. Build warnings fail the build so
-new violations are actionable. If an imported module cannot adopt a diagnostic
-immediately, scope the exception to that module in its project file with
-`WarningsNotAsErrors`, or to its path and diagnostic ID in `.editorconfig`.
-Do not weaken the solution-wide policy for a module-specific exception.
+Run the verification command after restore. The standard build enforces
+analyzers and code-style rules, and build warnings fail so new violations are
+actionable. If an imported module cannot adopt a diagnostic immediately, scope
+the exception to that module in its project file with `WarningsNotAsErrors`, or
+to its path and diagnostic ID in `.editorconfig`. Do not weaken the
+solution-wide policy for a module-specific exception.
 
 ## MAUI shell
 
