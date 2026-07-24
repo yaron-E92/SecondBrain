@@ -1,0 +1,79 @@
+{
+  "specificationVersion": "1.0",
+  "imports": [
+    {
+      "notionId": "20000000000000000000000000000001",
+      "target": "Project"
+    },
+    {
+      "notionId": "20000000000000000000000000000002",
+      "target": "Area"
+    },
+    {
+      "notionId": "20000000000000000000000000000003",
+      "target": "Note",
+      "archived": true,
+      "tags": ["Example", "migration"]
+    },
+    {
+      "notionId": "20000000000000000000000000000004",
+      "target": "Idea"
+    },
+    {
+      "notionId": "20000000000000000000000000000005",
+      "target": "JournalEntry"
+    },
+    {
+      "notionId": "20000000000000000000000000000006",
+      "target": "KnowledgeCapture"
+    },
+    {
+      "notionId": "20000000000000000000000000000007",
+      "target": "ResourceTopic"
+    },
+    {
+      "notionId": "20000000000000000000000000000008",
+      "target": "ResourceArtifact"
+    },
+    {
+      "notionId": "20000000000000000000000000000009",
+      "target": "Note"
+    }
+  ],
+  "skips": [
+    {
+      "fileName": "Notes_all.csv",
+      "reason": "duplicate-all-view"
+    },
+    {
+      "notionId": "2000000000000000000000000000000b",
+      "reason": "template"
+    },
+    {
+      "fileName": "Tasks.csv",
+      "reason": "module-owned-shuffletask"
+    },
+    {
+      "fileName": "Chores.csv",
+      "reason": "module-owned-shuffletask"
+    },
+    {
+      "fileName": "Pantry.csv",
+      "reason": "module-owned-phoodab"
+    }
+  ],
+  "deferred": [
+    {
+      "notionId": "2000000000000000000000000000000a",
+      "reason": "ambiguous-resource-classification-required"
+    }
+  ],
+  "unresolvedLinks": [
+    {
+      "sourceNotionId": "20000000000000000000000000000003",
+      "targetNotionId": "2fffffffffffffffffffffffffffffff",
+      "relationType": "Related",
+      "policy": "report-only-no-placeholder"
+    }
+  ]
+}
