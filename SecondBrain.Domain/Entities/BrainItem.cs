@@ -9,6 +9,9 @@ public sealed class BrainItem
     private readonly ReadOnlyCollection<SecondBrainItemId> _readOnlyContextualLinks;
     private readonly List<SecondBrainItemId> _derivedItemLinks;
     private readonly ReadOnlyCollection<SecondBrainItemId> _readOnlyDerivedItemLinks;
+    private readonly List<SecondBrainItemId> _provenanceSourceLinks;
+    private readonly ReadOnlyCollection<SecondBrainItemId> _readOnlyProvenanceSourceLinks;
+    private readonly List<BrainItem> _resourceProvenanceSources;
 
     public BrainItem(
         SecondBrainItemId id,
@@ -28,7 +31,11 @@ public sealed class BrainItem
         string? sourceCitation = null,
         DateTimeOffset? reminderAt = null,
         CaptureProcessingState? captureProcessingState = null,
-        IEnumerable<SecondBrainItemId>? derivedItemLinks = null)
+        IEnumerable<SecondBrainItemId>? derivedItemLinks = null,
+        ResourceArtifactKind? resourceArtifactKind = null,
+        ResourceFreshness? resourceFreshness = null,
+        DateOnly? reviewDate = null,
+        IEnumerable<BrainItem>? provenanceSources = null)
     {
         if (id.Value == Guid.Empty)
         {
@@ -61,6 +68,7 @@ public sealed class BrainItem
         }
 
         var initialDerivedItemLinks = (derivedItemLinks ?? []).ToArray();
+        var initialProvenanceSources = (provenanceSources ?? []).ToArray();
         ValidateKindMetadata(
             kind,
             noteKind,
@@ -72,6 +80,10 @@ public sealed class BrainItem
             reminderAt,
             captureProcessingState,
             initialDerivedItemLinks,
+            resourceArtifactKind,
+            resourceFreshness,
+            reviewDate,
+            initialProvenanceSources,
             createdAt);
 
         Id = id;
@@ -89,6 +101,9 @@ public sealed class BrainItem
         SourceCitation = sourceCitation?.Trim();
         ReminderAt = reminderAt;
         CaptureProcessingState = captureProcessingState;
+        ResourceArtifactKind = resourceArtifactKind;
+        ResourceFreshness = resourceFreshness;
+        ReviewDate = reviewDate;
         Tags = Array.AsReadOnly(NormalizeTags(tags).ToArray());
 
         _contextualLinks = [];
@@ -106,6 +121,15 @@ public sealed class BrainItem
         }
 
         _readOnlyDerivedItemLinks = _derivedItemLinks.AsReadOnly();
+
+        _provenanceSourceLinks = [];
+        _resourceProvenanceSources = [];
+        foreach (var source in initialProvenanceSources)
+        {
+            AddProvenanceSourceCore(source);
+        }
+
+        _readOnlyProvenanceSourceLinks = _provenanceSourceLinks.AsReadOnly();
     }
 
     public SecondBrainItemId Id { get; }
@@ -138,6 +162,12 @@ public sealed class BrainItem
 
     public CaptureProcessingState? CaptureProcessingState { get; private set; }
 
+    public ResourceArtifactKind? ResourceArtifactKind { get; }
+
+    public ResourceFreshness? ResourceFreshness { get; private set; }
+
+    public DateOnly? ReviewDate { get; }
+
     public IReadOnlyCollection<string> Tags { get; }
 
     public IReadOnlyCollection<SecondBrainItemId> ContextualLinks =>
@@ -145,6 +175,9 @@ public sealed class BrainItem
 
     public IReadOnlyCollection<SecondBrainItemId> DerivedItemLinks =>
         _readOnlyDerivedItemLinks;
+
+    public IReadOnlyCollection<SecondBrainItemId> ProvenanceSourceLinks =>
+        _readOnlyProvenanceSourceLinks;
 
     public bool IsArchived { get; private set; }
 
@@ -202,6 +235,33 @@ public sealed class BrainItem
         AddDerivedItemLinkCore(linkedItemId);
     }
 
+    public void MarkResourceCurrent()
+    {
+        EnsureActive();
+        EnsureResourceArtifact();
+
+        if (ResourceFreshness == global::SecondBrain.Domain.Entities.ResourceFreshness.Current)
+        {
+            throw new InvalidOperationException("Resource Artifact is already Current.");
+        }
+
+        ResourceFreshness = global::SecondBrain.Domain.Entities.ResourceFreshness.Current;
+    }
+
+    public void MarkResourceOutdated()
+    {
+        EnsureActive();
+        EnsureResourceFreshness(global::SecondBrain.Domain.Entities.ResourceFreshness.Current);
+        ResourceFreshness = global::SecondBrain.Domain.Entities.ResourceFreshness.Outdated;
+    }
+
+    public void AddProvenanceSource(BrainItem source)
+    {
+        EnsureActive();
+        EnsureResourceArtifact();
+        AddProvenanceSourceCore(source);
+    }
+
     public void Archive()
     {
         if (IsArchived)
@@ -233,6 +293,10 @@ public sealed class BrainItem
         DateTimeOffset? reminderAt,
         CaptureProcessingState? captureProcessingState,
         IReadOnlyCollection<SecondBrainItemId> derivedItemLinks,
+        ResourceArtifactKind? resourceArtifactKind,
+        ResourceFreshness? resourceFreshness,
+        DateOnly? reviewDate,
+        IReadOnlyCollection<BrainItem> provenanceSources,
         DateTimeOffset createdAt)
     {
         switch (kind)
@@ -251,10 +315,15 @@ public sealed class BrainItem
                         sourceCitation,
                         reminderAt,
                         captureProcessingState,
-                        derivedItemLinks))
+                        derivedItemLinks) ||
+                    HasResourceMetadata(
+                        resourceArtifactKind,
+                        resourceFreshness,
+                        reviewDate,
+                        provenanceSources))
                 {
                     throw new ArgumentException(
-                        "Notes cannot have idea, journal, or capture metadata.");
+                        "Notes cannot have idea, journal, capture, or resource metadata.");
                 }
 
                 break;
@@ -273,10 +342,15 @@ public sealed class BrainItem
                         sourceCitation,
                         reminderAt,
                         captureProcessingState,
-                        derivedItemLinks))
+                        derivedItemLinks) ||
+                    HasResourceMetadata(
+                        resourceArtifactKind,
+                        resourceFreshness,
+                        reviewDate,
+                        provenanceSources))
                 {
                     throw new ArgumentException(
-                        "Ideas cannot have note, journal, or capture metadata.");
+                        "Ideas cannot have note, journal, capture, or resource metadata.");
                 }
 
                 break;
@@ -297,10 +371,15 @@ public sealed class BrainItem
                         sourceCitation,
                         reminderAt,
                         captureProcessingState,
-                        derivedItemLinks))
+                        derivedItemLinks) ||
+                    HasResourceMetadata(
+                        resourceArtifactKind,
+                        resourceFreshness,
+                        reviewDate,
+                        provenanceSources))
                 {
                     throw new ArgumentException(
-                        "Journal entries cannot have note, idea, or capture metadata.");
+                        "Journal entries cannot have note, idea, capture, or resource metadata.");
                 }
 
                 break;
@@ -308,10 +387,15 @@ public sealed class BrainItem
             case BrainItemKind.KnowledgeCapture:
                 if (noteKind is not null ||
                     ideaMaturity is not null ||
-                    entryDate is not null)
+                    entryDate is not null ||
+                    HasResourceMetadata(
+                        resourceArtifactKind,
+                        resourceFreshness,
+                        reviewDate,
+                        provenanceSources))
                 {
                     throw new ArgumentException(
-                        "Knowledge captures cannot have authored item metadata.");
+                        "Knowledge captures cannot have authored or resource metadata.");
                 }
 
                 ValidateCaptureMetadata(
@@ -322,8 +406,48 @@ public sealed class BrainItem
                     captureProcessingState,
                     createdAt);
                 break;
+
+            case BrainItemKind.ResourceArtifact:
+                if (noteKind is not null ||
+                    ideaMaturity is not null ||
+                    entryDate is not null ||
+                    HasCaptureMetadata(
+                        captureSourceType,
+                        sourceUri,
+                        sourceCitation,
+                        reminderAt,
+                        captureProcessingState,
+                        derivedItemLinks))
+                {
+                    throw new ArgumentException(
+                        "Resource Artifacts cannot have note, idea, journal, or capture metadata.");
+                }
+
+                if (resourceArtifactKind is null ||
+                    !Enum.IsDefined(resourceArtifactKind.Value))
+                {
+                    throw new ArgumentOutOfRangeException(nameof(resourceArtifactKind));
+                }
+
+                if (resourceFreshness is null ||
+                    !Enum.IsDefined(resourceFreshness.Value))
+                {
+                    throw new ArgumentOutOfRangeException(nameof(resourceFreshness));
+                }
+
+                break;
         }
     }
+
+    private static bool HasResourceMetadata(
+        ResourceArtifactKind? resourceArtifactKind,
+        ResourceFreshness? resourceFreshness,
+        DateOnly? reviewDate,
+        IReadOnlyCollection<BrainItem> provenanceSources) =>
+        resourceArtifactKind is not null ||
+        resourceFreshness is not null ||
+        reviewDate is not null ||
+        provenanceSources.Count > 0;
 
     private static bool HasCaptureMetadata(
         CaptureSourceType? captureSourceType,
@@ -464,6 +588,65 @@ public sealed class BrainItem
         _derivedItemLinks.Add(linkedItemId);
     }
 
+    private void AddProvenanceSourceCore(BrainItem source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (source.Id == Id)
+        {
+            throw new ArgumentException(
+                "A Resource Artifact cannot derive from itself.",
+                nameof(source));
+        }
+
+        if (source.Kind is not (
+            BrainItemKind.KnowledgeCapture or
+            BrainItemKind.Note or
+            BrainItemKind.ResourceArtifact))
+        {
+            throw new ArgumentException(
+                "Resource Artifact provenance must reference a Knowledge Capture, " +
+                "Note, or Resource Artifact.",
+                nameof(source));
+        }
+
+        if (_provenanceSourceLinks.Contains(source.Id))
+        {
+            throw new InvalidOperationException("Provenance source already exists.");
+        }
+
+        if (source.Kind == BrainItemKind.ResourceArtifact &&
+            source.HasTransitiveProvenanceSource(Id, []))
+        {
+            throw new InvalidOperationException(
+                "Resource Artifact provenance cannot contain a cycle.");
+        }
+
+        _provenanceSourceLinks.Add(source.Id);
+        if (source.Kind == BrainItemKind.ResourceArtifact)
+        {
+            _resourceProvenanceSources.Add(source);
+        }
+    }
+
+    private bool HasTransitiveProvenanceSource(
+        SecondBrainItemId sourceId,
+        HashSet<SecondBrainItemId> visited)
+    {
+        if (!visited.Add(Id))
+        {
+            return false;
+        }
+
+        if (_provenanceSourceLinks.Contains(sourceId))
+        {
+            return true;
+        }
+
+        return _resourceProvenanceSources.Any(
+            source => source.HasTransitiveProvenanceSource(sourceId, visited));
+    }
+
     private void EnsureIdeaMaturity(IdeaMaturity required)
     {
         if (Kind != BrainItemKind.Idea)
@@ -495,6 +678,26 @@ public sealed class BrainItem
         {
             throw new InvalidOperationException(
                 "Only Knowledge Captures have a processing lifecycle.");
+        }
+    }
+
+    private void EnsureResourceFreshness(ResourceFreshness required)
+    {
+        EnsureResourceArtifact();
+
+        if (ResourceFreshness != required)
+        {
+            throw new InvalidOperationException(
+                $"Resource Artifact must be {required}, but is {ResourceFreshness}.");
+        }
+    }
+
+    private void EnsureResourceArtifact()
+    {
+        if (Kind != BrainItemKind.ResourceArtifact)
+        {
+            throw new InvalidOperationException(
+                "Only Resource Artifacts have freshness and provenance lifecycles.");
         }
     }
 
