@@ -11,7 +11,6 @@ public sealed class SecondBrainDbContextModelSnapshot : ModelSnapshot
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
         modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
-        modelBuilder.HasAnnotation("Relational:MaxIdentifierLength", 64);
 
         ConfigureContexts(modelBuilder);
         ConfigureTags(modelBuilder);
