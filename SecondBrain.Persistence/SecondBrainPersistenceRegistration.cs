@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SecondBrain.Application.Ports;
 
 namespace SecondBrain.Persistence;
 
@@ -16,6 +17,8 @@ public static class SecondBrainPersistenceRegistration
         services.AddDbContext<SecondBrainDbContext>(
             options => options.UseSqlite($"Data Source={fullPath}"));
         services.AddScoped<SecondBrainDataStore>();
+        services.AddScoped<ICoreKnowledgeRepository>(
+            provider => provider.GetRequiredService<SecondBrainDataStore>());
         return services;
     }
 

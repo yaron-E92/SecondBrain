@@ -158,15 +158,15 @@ public sealed class BrainItem
 
     public BrainItemKind Kind { get; }
 
-    public string Title { get; }
+    public string Title { get; private set; }
 
-    public string Content { get; }
+    public string Content { get; private set; }
 
-    public PrimaryPlacement PrimaryPlacement { get; }
+    public PrimaryPlacement PrimaryPlacement { get; private set; }
 
     public DateTimeOffset CreatedAt { get; }
 
-    public DateTimeOffset UpdatedAt { get; }
+    public DateTimeOffset UpdatedAt { get; private set; }
 
     public NoteKind? NoteKind { get; }
 
@@ -208,6 +208,47 @@ public sealed class BrainItem
     public bool IsArchived { get; private set; }
 
     public bool IsFavorite { get; private set; }
+
+    public void UpdateContent(
+        string title,
+        string content,
+        DateTimeOffset updatedAt)
+    {
+        EnsureActive();
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("Brain item title cannot be empty.", nameof(title));
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new ArgumentException("Brain item content cannot be empty.", nameof(content));
+        }
+
+        EnsureUpdatedAtDoesNotMoveBackward(updatedAt);
+        Title = title.Trim();
+        Content = content.Trim();
+        UpdatedAt = updatedAt;
+    }
+
+    public void MoveTo(
+        PrimaryPlacement primaryPlacement,
+        DateTimeOffset updatedAt)
+    {
+        EnsureActive();
+        ArgumentNullException.ThrowIfNull(primaryPlacement);
+
+        if (PrimaryPlacement == primaryPlacement)
+        {
+            throw new InvalidOperationException(
+                "Brain item is already in the requested primary placement.");
+        }
+
+        EnsureUpdatedAtDoesNotMoveBackward(updatedAt);
+        PrimaryPlacement = primaryPlacement;
+        UpdatedAt = updatedAt;
+    }
 
     public void Sharpen()
     {
@@ -797,6 +838,16 @@ public sealed class BrainItem
         if (IsArchived)
         {
             throw new InvalidOperationException("Archived Brain items cannot be changed.");
+        }
+    }
+
+    private void EnsureUpdatedAtDoesNotMoveBackward(DateTimeOffset updatedAt)
+    {
+        if (updatedAt < UpdatedAt)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(updatedAt),
+                "Updated time cannot precede the current updated time.");
         }
     }
 }
