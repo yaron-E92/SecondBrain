@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using SecondBrain.Application;
@@ -112,6 +113,8 @@ public sealed class DependencyInjectionRegistrationTests
     [TearDown]
     public void TearDown()
     {
+        SqliteConnection.ClearAllPools();
+
         foreach (var directory in temporaryDirectories.Where(Directory.Exists))
         {
             Directory.Delete(directory, recursive: true);
