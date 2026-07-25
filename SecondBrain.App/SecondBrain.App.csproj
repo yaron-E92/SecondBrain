@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SecondBrain.Abstractions\SecondBrain.Abstractions.csproj" />
     <ProjectReference Include="..\SecondBrain.Application\SecondBrain.Application.csproj" />
+    <ProjectReference Include="..\SecondBrain.Persistence\SecondBrain.Persistence.csproj" />
   </ItemGroup>
 
 </Project>
