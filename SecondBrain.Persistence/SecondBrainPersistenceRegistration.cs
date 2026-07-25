@@ -14,18 +14,12 @@ public static class SecondBrainPersistenceRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
 
         var fullPath = Path.GetFullPath(databasePath);
-        services.AddDbContext<SecondBrainDbContext>(
+        services.AddDbContextFactory<SecondBrainDbContext>(
             options => options.UseSqlite($"Data Source={fullPath}"));
         services.AddScoped<SecondBrainDataStore>();
         services.AddScoped<ICoreKnowledgeRepository>(
             provider => provider.GetRequiredService<SecondBrainDataStore>());
+        services.AddSingleton<SecondBrainPersistenceInitializer>();
         return services;
-    }
-
-    public static void InitializeSecondBrainPersistence(this IServiceProvider services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        using var scope = services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<SecondBrainDbContext>().Database.Migrate();
     }
 }
