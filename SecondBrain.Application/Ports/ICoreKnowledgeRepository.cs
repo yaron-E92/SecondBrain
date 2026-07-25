@@ -1,5 +1,3 @@
-using SecondBrain.Domain.Entities;
-
 namespace SecondBrain.Application.Ports;
 
 public interface ICoreKnowledgeRepository
@@ -11,11 +9,3 @@ public interface ICoreKnowledgeRepository
         CoreKnowledgeState state,
         CancellationToken cancellationToken = default);
 }
-
-public sealed record CoreKnowledgeState(
-    IReadOnlyList<Project> Projects,
-    IReadOnlyList<Area> Areas,
-    IReadOnlyList<ResourceTopic> ResourceTopics,
-    IReadOnlyList<Tag> Tags,
-    IReadOnlyList<BrainItem> BrainItems,
-    IReadOnlyList<Journal> Journals);
