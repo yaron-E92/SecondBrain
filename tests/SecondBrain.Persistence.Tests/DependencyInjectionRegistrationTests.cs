@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
 using SecondBrain.Application;
 using SecondBrain.Application.Ports;
 using SecondBrain.Application.UseCases;
