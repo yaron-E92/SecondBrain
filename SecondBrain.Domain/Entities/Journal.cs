@@ -24,13 +24,23 @@ public sealed class Journal
 
     public SecondBrainItemId Id { get; }
 
-    public string Title { get; }
+    public string Title { get; private set; }
 
     public IReadOnlyList<BrainItem> Entries =>
         _entries
             .OrderBy(entry => entry.EntryDate)
             .ThenBy(entry => entry.Id.Value)
             .ToArray();
+
+    public void Rename(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("Journal title cannot be empty.", nameof(title));
+        }
+
+        Title = title.Trim();
+    }
 
     public void AddEntry(BrainItem entry)
     {

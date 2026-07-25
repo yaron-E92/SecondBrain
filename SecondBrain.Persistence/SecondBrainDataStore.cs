@@ -1,13 +1,45 @@
 using Microsoft.EntityFrameworkCore;
 using SecondBrain.Abstractions.Items;
 using SecondBrain.Abstractions.Modules;
+using SecondBrain.Application.Ports;
 using SecondBrain.Domain.Entities;
 using SecondBrain.Domain.ValueObjects;
 
 namespace SecondBrain.Persistence;
 
 public sealed class SecondBrainDataStore(SecondBrainDbContext context)
+    : ICoreKnowledgeRepository
 {
+    public async Task<CoreKnowledgeState> LoadStateAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = await LoadAsync(cancellationToken);
+        return new CoreKnowledgeState(
+            snapshot.Projects,
+            snapshot.Areas,
+            snapshot.ResourceTopics,
+            snapshot.Tags,
+            snapshot.BrainItems,
+            snapshot.Journals);
+    }
+
+    public Task SaveStateAsync(
+        CoreKnowledgeState state,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return ReplaceAsync(
+            new SecondBrainDataSnapshot(
+                state.Projects,
+                state.Areas,
+                state.ResourceTopics,
+                state.Tags,
+                state.BrainItems,
+                state.Journals),
+            cancellationToken);
+    }
+
     public async Task ReplaceAsync(
         SecondBrainDataSnapshot snapshot,
         CancellationToken cancellationToken = default)
