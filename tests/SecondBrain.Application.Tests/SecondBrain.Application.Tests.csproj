@@ -17,4 +17,9 @@
     <ProjectReference Include="..\..\SecondBrain.Application\SecondBrain.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\DashboardViewModels.cs"
+             Link="ViewModels\DashboardViewModels.cs" />
+  </ItemGroup>
+
 </Project>

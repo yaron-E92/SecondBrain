@@ -65,14 +65,14 @@ solution-wide policy for a module-specific exception.
 
 ## MAUI shell
 
-`SecondBrain.App` is the MAUI presentation and composition-root project. The
+`SecondBrain.Presentation` is the MAUI presentation and composition-root project. The
 local development target is Android on .NET 10, so install or restore the MAUI
 Android workload before building the app. When using the repo automation VM,
 the Android SDK and JDK are resolved from `$DOTNET_ROOT/android-sdk` and
 `$DOTNET_ROOT/android-jdk`.
 
 ```bash
-dotnet workload restore SecondBrain.App/SecondBrain.App.csproj
-dotnet restore SecondBrain.App/SecondBrain.App.csproj
-dotnet build SecondBrain.App/SecondBrain.App.csproj --no-restore
+dotnet workload restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
+dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --no-restore
 ```

@@ -1,4 +1,4 @@
-namespace SecondBrain.App;
+namespace SecondBrain.Presentation;
 
 public sealed class App : Microsoft.Maui.Controls.Application
 {
