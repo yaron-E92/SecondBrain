@@ -18,23 +18,23 @@ public sealed partial class CoreEditorViewModel : ObservableObject
     private bool _needsJournalAttachment;
 
     [ObservableProperty]
-    private string _title = string.Empty;
+    public partial string Title { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _content = string.Empty;
+    public partial string Content { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _isDirty;
+    public partial bool IsDirty { get; set; }
 
     [ObservableProperty]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
-    private string? _errorMessage;
+    public partial string? ErrorMessage { get; set; }
 
     [ObservableProperty]
-    private BrainItem? _lastSavedItem;
+    public partial BrainItem? LastSavedItem { get; set; }
 
     public CoreEditorViewModel(
         CoreKnowledgeUseCases useCases,

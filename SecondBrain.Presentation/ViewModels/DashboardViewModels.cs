@@ -10,32 +10,32 @@ public sealed partial class DashboardViewModel(
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AreProjectsEmpty))]
-    private IReadOnlyList<DashboardProject> activeProjects = [];
+    public partial IReadOnlyList<DashboardProject> ActiveProjects { get; set; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AreFavoritesEmpty))]
-    private IReadOnlyList<DashboardItem> favorites = [];
+    public partial IReadOnlyList<DashboardItem> Favorites { get; set; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AreRecentItemsEmpty))]
-    private IReadOnlyList<DashboardItem> recentItems = [];
+    public partial IReadOnlyList<DashboardItem> RecentItems { get; set; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AreModuleSlotsEmpty))]
-    private IReadOnlyList<DashboardModuleSlot> moduleSlots = [];
+    public partial IReadOnlyList<DashboardModuleSlot> ModuleSlots { get; set; } = [];
 
     [ObservableProperty]
-    private string captureText = string.Empty;
+    public partial string CaptureText { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string captureStatus = string.Empty;
+    public partial string CaptureStatus { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool isLoading;
+    public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
-    private string? errorMessage;
+    public partial string? ErrorMessage { get; set; }
 
     public IReadOnlyList<DashboardItem> InboxItems => inboxViewModel.Items;
 
@@ -129,14 +129,14 @@ public sealed partial class InboxViewModel(DashboardUseCase dashboardUseCase)
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
-    private IReadOnlyList<DashboardItem> items = [];
+    public partial IReadOnlyList<DashboardItem> Items { get; set; } = [];
 
     [ObservableProperty]
-    private bool isLoading;
+    public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
-    private string? errorMessage;
+    public partial string? ErrorMessage { get; set; }
 
     public bool IsEmpty => Items.Count == 0;
 

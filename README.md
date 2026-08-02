@@ -65,16 +65,23 @@ solution-wide policy for a module-specific exception.
 
 ## MAUI shell
 
-`SecondBrain.Presentation` is the MAUI presentation and composition-root project. The
-local development target is Android on .NET 10, so install or restore the MAUI
-Android workload before building the app. When using the repo automation VM,
-the Android SDK and JDK are resolved from `$DOTNET_ROOT/android-sdk` and
-`$DOTNET_ROOT/android-jdk`.
+`SecondBrain.Presentation` is the MAUI presentation and composition-root project.
+It targets Android on every supported development host and additionally targets
+Windows when built on Windows. Install or restore the applicable MAUI workloads
+before building the app. When using the repo automation VM, the Android SDK and
+JDK are resolved from `$DOTNET_ROOT/android-sdk` and `$DOTNET_ROOT/android-jdk`.
 
 ```bash
 dotnet workload restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
 dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
 dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore
+```
+
+On Windows, build or run the native target explicitly with:
+
+```powershell
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj -f net10.0-windows10.0.19041.0
+dotnet run --project SecondBrain.Presentation/SecondBrain.Presentation.csproj -f net10.0-windows10.0.19041.0
 ```
 
 On Ubuntu, install Microsoft OpenJDK 21 and make the Android SDK available

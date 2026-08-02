@@ -6,11 +6,13 @@ namespace SecondBrain.Presentation.ViewModels;
 public sealed partial class ResourceEditorSection : ObservableObject
 {
     [ObservableProperty]
-    private ResourceArtifactKind _artifactKind = ResourceArtifactKind.Guide;
+    public partial ResourceArtifactKind ArtifactKind { get; set; } =
+        ResourceArtifactKind.Guide;
 
     [ObservableProperty]
-    private ResourceFreshness _freshness = ResourceFreshness.Draft;
+    public partial ResourceFreshness Freshness { get; set; } =
+        ResourceFreshness.Draft;
 
     [ObservableProperty]
-    private DateOnly? _reviewDate;
+    public partial DateOnly? ReviewDate { get; set; }
 }
