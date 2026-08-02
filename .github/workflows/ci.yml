@@ -144,7 +144,10 @@ jobs:
 
       - name: Create Android emulator
         shell: bash
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/android-avd
         run: |
+          mkdir -p "$ANDROID_AVD_HOME"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "platform-tools" \
             "emulator" \
@@ -157,6 +160,8 @@ jobs:
 
       - name: Start Android emulator
         shell: bash
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/android-avd
         run: |
           sudo chmod 666 /dev/kvm
           nohup "$ANDROID_HOME/emulator/emulator" \
