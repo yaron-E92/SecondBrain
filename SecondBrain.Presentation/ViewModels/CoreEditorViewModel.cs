@@ -412,11 +412,11 @@ public sealed partial class CoreEditorViewModel : ObservableObject
                 yield return BrainItemLifecycleTransition.StartConsumingCapture;
             }
 
-            if (target == CaptureProcessingState.Distilled)
+            if (target == CaptureProcessingState.Distilled && target != current)
             {
                 yield return BrainItemLifecycleTransition.MarkCaptureDistilled;
             }
-            else if (target == CaptureProcessingState.Referenced)
+            else if (target == CaptureProcessingState.Referenced && target != current)
             {
                 yield return BrainItemLifecycleTransition.MarkCaptureReferenced;
             }
