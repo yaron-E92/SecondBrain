@@ -9,39 +9,39 @@ namespace SecondBrain.Presentation.ViewModels;
 
 public sealed partial class CoreEditorViewModel : ObservableObject
 {
-    private readonly CoreKnowledgeUseCases useCases;
-    private readonly Func<DateTimeOffset> utcNow;
-    private EditorSnapshot? original;
-    private PrimaryPlacement? primaryPlacement;
-    private DateTimeOffset createdAt;
-    private bool suppressDirtyTracking;
-    private bool needsJournalAttachment;
+    private readonly CoreKnowledgeUseCases _useCases;
+    private readonly Func<DateTimeOffset> _utcNow;
+    private CoreEditorSnapshot? _original;
+    private PrimaryPlacement? _primaryPlacement;
+    private DateTimeOffset _createdAt;
+    private bool _suppressDirtyTracking;
+    private bool _needsJournalAttachment;
 
     [ObservableProperty]
-    private string title = string.Empty;
+    private string _title = string.Empty;
 
     [ObservableProperty]
-    private string content = string.Empty;
+    private string _content = string.Empty;
 
     [ObservableProperty]
-    private bool isDirty;
+    private bool _isDirty;
 
     [ObservableProperty]
-    private bool isBusy;
+    private bool _isBusy;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
-    private string? errorMessage;
+    private string? _errorMessage;
 
     [ObservableProperty]
-    private BrainItem? lastSavedItem;
+    private BrainItem? _lastSavedItem;
 
     public CoreEditorViewModel(
         CoreKnowledgeUseCases useCases,
         Func<DateTimeOffset>? utcNow = null)
     {
-        this.useCases = useCases;
-        this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+        _useCases = useCases;
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
 
         Note = new NoteEditorSection();
         Idea = new IdeaEditorSection();
@@ -97,27 +97,27 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             throw new ArgumentOutOfRangeException(nameof(kind));
         }
 
-        suppressDirtyTracking = true;
+        _suppressDirtyTracking = true;
         try
         {
             ItemId = null;
             Kind = kind;
             IsNew = true;
-            primaryPlacement = placement;
-            createdAt = utcNow();
-            needsJournalAttachment = kind == BrainItemKind.JournalEntry;
+            _primaryPlacement = placement;
+            _createdAt = _utcNow();
+            _needsJournalAttachment = kind == BrainItemKind.JournalEntry;
             Title = string.Empty;
             Content = string.Empty;
             ErrorMessage = null;
             LastSavedItem = null;
             ResetSections();
             NotifyEditorShapeChanged();
-            original = CaptureSnapshot();
+            _original = CaptureSnapshot();
             IsDirty = false;
         }
         finally
         {
-            suppressDirtyTracking = false;
+            _suppressDirtyTracking = false;
         }
     }
 
@@ -131,7 +131,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
 
         try
         {
-            var result = await useCases.GetBrainItemAsync(
+            var result = await _useCases.GetBrainItemAsync(
                 new GetBrainItemQuery(itemId),
                 cancellationToken);
             if (!result.IsSuccess)
@@ -168,7 +168,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             if (IsNew)
             {
                 var item = CreateItem();
-                saveResult = await useCases.CreateBrainItemAsync(
+                saveResult = await _useCases.CreateBrainItemAsync(
                     new CreateBrainItemCommand(item),
                     cancellationToken);
                 if (!saveResult.IsSuccess)
@@ -183,12 +183,12 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             }
             else
             {
-                saveResult = await useCases.UpdateBrainItemAsync(
+                saveResult = await _useCases.UpdateBrainItemAsync(
                     new UpdateBrainItemCommand(
                         ItemId!.Value,
                         Title,
                         Content,
-                        utcNow()),
+                        _utcNow()),
                     cancellationToken);
                 if (!saveResult.IsSuccess)
                 {
@@ -209,9 +209,9 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             }
 
             savedItem = lifecycleResult.Value!;
-            if (needsJournalAttachment)
+            if (_needsJournalAttachment)
             {
-                var journalResult = await useCases.AddJournalEntryAsync(
+                var journalResult = await _useCases.AddJournalEntryAsync(
                     new AddJournalEntryCommand(
                         JournalEntry.JournalId!.Value,
                         savedItem.Id),
@@ -223,11 +223,11 @@ public sealed partial class CoreEditorViewModel : ObservableObject
                     return;
                 }
 
-                needsJournalAttachment = false;
+                _needsJournalAttachment = false;
             }
 
             LastSavedItem = savedItem;
-            original = CaptureSnapshot();
+            _original = CaptureSnapshot();
             IsDirty = false;
         }
         catch (ArgumentException exception)
@@ -251,27 +251,27 @@ public sealed partial class CoreEditorViewModel : ObservableObject
     [RelayCommand]
     private void Cancel()
     {
-        if (original is null)
+        if (_original is null)
         {
             return;
         }
 
-        ApplySnapshot(original);
+        ApplySnapshot(_original);
         ErrorMessage = null;
         IsDirty = false;
     }
 
     private void LoadItem(BrainItem item, SecondBrainItemId? journalId)
     {
-        suppressDirtyTracking = true;
+        _suppressDirtyTracking = true;
         try
         {
             ItemId = item.Id;
             Kind = item.Kind;
             IsNew = false;
-            primaryPlacement = item.PrimaryPlacement;
-            createdAt = item.CreatedAt;
-            needsJournalAttachment = false;
+            _primaryPlacement = item.PrimaryPlacement;
+            _createdAt = item.CreatedAt;
+            _needsJournalAttachment = false;
             Title = item.Title;
             Content = item.Content;
             ErrorMessage = null;
@@ -295,12 +295,12 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             JournalEntry.OccurrenceDate = item.EntryDate;
 
             NotifyEditorShapeChanged();
-            original = CaptureSnapshot();
+            _original = CaptureSnapshot();
             IsDirty = false;
         }
         finally
         {
-            suppressDirtyTracking = false;
+            _suppressDirtyTracking = false;
         }
     }
 
@@ -317,8 +317,8 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             Kind,
             Title,
             Content,
-            primaryPlacement!,
-            createdAt,
+            _primaryPlacement!,
+            _createdAt,
             noteKind: Kind == BrainItemKind.Note ? Note.Kind : null,
             ideaMaturity: Kind == BrainItemKind.Idea ? Idea.Maturity : null,
             entryDate: Kind == BrainItemKind.JournalEntry
@@ -356,7 +356,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         var current = CoreOperationResult<BrainItem>.Success(item);
         foreach (var transition in transitions)
         {
-            current = await useCases.TransitionBrainItemAsync(
+            current = await _useCases.TransitionBrainItemAsync(
                 new TransitionBrainItemCommand(item.Id, transition),
                 cancellationToken);
             if (!current.IsSuccess)
@@ -455,7 +455,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             return "Content is required.";
         }
 
-        if (primaryPlacement is null)
+        if (_primaryPlacement is null)
         {
             return "Primary placement is required.";
         }
@@ -506,7 +506,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         JournalEntry.OccurrenceDate = null;
     }
 
-    private EditorSnapshot CaptureSnapshot() =>
+    private CoreEditorSnapshot CaptureSnapshot() =>
         new(
             Title,
             Content,
@@ -523,9 +523,9 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             JournalEntry.JournalId,
             JournalEntry.OccurrenceDate);
 
-    private void ApplySnapshot(EditorSnapshot snapshot)
+    private void ApplySnapshot(CoreEditorSnapshot snapshot)
     {
-        suppressDirtyTracking = true;
+        _suppressDirtyTracking = true;
         try
         {
             Title = snapshot.Title;
@@ -545,13 +545,13 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         }
         finally
         {
-            suppressDirtyTracking = false;
+            _suppressDirtyTracking = false;
         }
     }
 
     private void TrackShellChange(object? sender, PropertyChangedEventArgs args)
     {
-        if (!suppressDirtyTracking &&
+        if (!_suppressDirtyTracking &&
             args.PropertyName is nameof(Title) or nameof(Content))
         {
             IsDirty = true;
@@ -560,7 +560,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
 
     private void TrackSectionChange(object? sender, PropertyChangedEventArgs args)
     {
-        if (!suppressDirtyTracking)
+        if (!_suppressDirtyTracking)
         {
             IsDirty = true;
         }
@@ -579,71 +579,4 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsJournalEntry));
     }
 
-    private sealed record EditorSnapshot(
-        string Title,
-        string Content,
-        NoteKind NoteKind,
-        IdeaMaturity IdeaMaturity,
-        CaptureSourceType CaptureSourceType,
-        string SourceUrl,
-        string SourceCitation,
-        DateTimeOffset? ReminderAt,
-        CaptureProcessingState CaptureProcessingState,
-        ResourceArtifactKind ResourceArtifactKind,
-        ResourceFreshness ResourceFreshness,
-        DateOnly? ReviewDate,
-        SecondBrainItemId? JournalId,
-        DateOnly? OccurrenceDate);
-}
-
-public sealed partial class NoteEditorSection : ObservableObject
-{
-    [ObservableProperty]
-    private NoteKind kind = NoteKind.General;
-}
-
-public sealed partial class IdeaEditorSection : ObservableObject
-{
-    [ObservableProperty]
-    private IdeaMaturity maturity = IdeaMaturity.Captured;
-}
-
-public sealed partial class CaptureEditorSection : ObservableObject
-{
-    [ObservableProperty]
-    private CaptureSourceType sourceType = CaptureSourceType.Article;
-
-    [ObservableProperty]
-    private string sourceUrl = string.Empty;
-
-    [ObservableProperty]
-    private string sourceCitation = string.Empty;
-
-    [ObservableProperty]
-    private DateTimeOffset? reminderAt;
-
-    [ObservableProperty]
-    private CaptureProcessingState processingState =
-        CaptureProcessingState.Captured;
-}
-
-public sealed partial class ResourceEditorSection : ObservableObject
-{
-    [ObservableProperty]
-    private ResourceArtifactKind artifactKind = ResourceArtifactKind.Guide;
-
-    [ObservableProperty]
-    private ResourceFreshness freshness = ResourceFreshness.Draft;
-
-    [ObservableProperty]
-    private DateOnly? reviewDate;
-}
-
-public sealed partial class JournalEntryEditorSection : ObservableObject
-{
-    [ObservableProperty]
-    private SecondBrainItemId? journalId;
-
-    [ObservableProperty]
-    private DateOnly? occurrenceDate;
 }

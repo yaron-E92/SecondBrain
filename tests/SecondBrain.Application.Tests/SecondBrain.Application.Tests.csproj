@@ -20,8 +20,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\CoreEditorViewModels.cs"
-             Link="ViewModels\CoreEditorViewModels.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\CaptureEditorSection.cs"
+             Link="ViewModels\CaptureEditorSection.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\CoreEditorViewModel.cs"
+             Link="ViewModels\CoreEditorViewModel.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\CoreEditorSnapshot.cs"
+             Link="ViewModels\CoreEditorSnapshot.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\IdeaEditorSection.cs"
+             Link="ViewModels\IdeaEditorSection.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\JournalEntryEditorSection.cs"
+             Link="ViewModels\JournalEntryEditorSection.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\NoteEditorSection.cs"
+             Link="ViewModels\NoteEditorSection.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\ResourceEditorSection.cs"
+             Link="ViewModels\ResourceEditorSection.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\DashboardViewModels.cs"
              Link="ViewModels\DashboardViewModels.cs" />
   </ItemGroup>
