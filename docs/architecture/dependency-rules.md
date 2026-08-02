@@ -12,13 +12,13 @@ The architecture issue terminology maps to the current projects as follows:
 | `Brain.Core` | `SecondBrain.Domain` and any future `SecondBrain.Core` project |
 | `Brain.Application` | `SecondBrain.Application` |
 | `Brain.Persistence` | `SecondBrain.Persistence` |
-| Application host | `SecondBrain.App` |
+| Application host | `SecondBrain.Presentation` |
 | Concrete modules | ShuffleTask, PHOODAB, SurvivalGarden, and future module projects |
 
 ## Allowed graph
 
 ```text
-SecondBrain.App ---------> Concrete modules
+SecondBrain.Presentation --> Concrete modules
       |                         |
       v                         v
 Persistence ------------> Abstractions
@@ -63,7 +63,7 @@ every role listed in its row.
   SecondBrain.
 - Standalone applications keep their own composition roots. They reference
   their concrete module and shared abstractions directly and remain buildable,
-  releasable, and usable without `SecondBrain.App`.
+  releasable, and usable without `SecondBrain.Presentation`.
 
 ## Adding projects
 

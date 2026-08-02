@@ -1,7 +1,7 @@
 using Android.App;
 using Android.Runtime;
 
-namespace SecondBrain.App;
+namespace SecondBrain.Presentation;
 
 [Application]
 public sealed class MainApplication(IntPtr handle, JniHandleOwnership ownership)
