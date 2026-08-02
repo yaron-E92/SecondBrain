@@ -10,7 +10,7 @@ namespace SecondBrain.Application.Tests.ViewModels;
 [TestFixture]
 public sealed class CoreEditorViewModelTests
 {
-    private static readonly DateTimeOffset Now =
+    private static readonly DateTimeOffset _now =
         new(2026, 8, 2, 12, 0, 0, TimeSpan.Zero);
 
     [TestCase(BrainItemKind.Note)]
@@ -25,7 +25,7 @@ public sealed class CoreEditorViewModelTests
         var repository = new FakeRepository(
             EmptyState() with { Areas = [area], Journals = [journal] });
         var useCases = new CoreKnowledgeUseCases(repository);
-        var editor = new CoreEditorViewModel(useCases, () => Now);
+        var editor = new CoreEditorViewModel(useCases, () => _now);
         editor.BeginCreate(kind, PrimaryPlacement.InArea(area.Id));
         editor.Title = $"{kind} title";
         editor.Content = $"{kind} content";
@@ -48,7 +48,7 @@ public sealed class CoreEditorViewModelTests
             Assert.That(journal.Entries.Single().Id, Is.EqualTo(saved.Id));
         }
 
-        var loaded = new CoreEditorViewModel(useCases, () => Now.AddHours(1));
+        var loaded = new CoreEditorViewModel(useCases, () => _now.AddHours(1));
         await loaded.LoadAsync(
             saved.Id,
             kind == BrainItemKind.JournalEntry ? journal.Id : null);
@@ -92,21 +92,21 @@ public sealed class CoreEditorViewModelTests
             });
         var useCases = new CoreKnowledgeUseCases(repository);
 
-        var ideaEditor = new CoreEditorViewModel(useCases, () => Now.AddHours(1));
+        var ideaEditor = new CoreEditorViewModel(useCases, () => _now.AddHours(1));
         await ideaEditor.LoadAsync(idea.Id);
         ideaEditor.Idea.Maturity = IdeaMaturity.Actionable;
         await ideaEditor.SaveCommand.ExecuteAsync(null);
 
         var captureEditor = new CoreEditorViewModel(
             useCases,
-            () => Now.AddHours(1));
+            () => _now.AddHours(1));
         await captureEditor.LoadAsync(capture.Id);
         captureEditor.Capture.ProcessingState = CaptureProcessingState.Referenced;
         await captureEditor.SaveCommand.ExecuteAsync(null);
 
         var resourceEditor = new CoreEditorViewModel(
             useCases,
-            () => Now.AddHours(1));
+            () => _now.AddHours(1));
         await resourceEditor.LoadAsync(resource.Id);
         resourceEditor.Resource.Freshness = ResourceFreshness.Outdated;
         await resourceEditor.SaveCommand.ExecuteAsync(null);
@@ -135,7 +135,7 @@ public sealed class CoreEditorViewModelTests
             EmptyState() with { Areas = [area], Journals = [journal] });
         var editor = new CoreEditorViewModel(
             new CoreKnowledgeUseCases(repository),
-            () => Now);
+            () => _now);
         editor.BeginCreate(
             BrainItemKind.JournalEntry,
             PrimaryPlacement.InArea(area.Id));
@@ -172,7 +172,7 @@ public sealed class CoreEditorViewModelTests
             EmptyState() with { Areas = [area] });
         var editor = new CoreEditorViewModel(
             new CoreKnowledgeUseCases(repository),
-            () => Now);
+            () => _now);
         editor.BeginCreate(BrainItemKind.Note, PrimaryPlacement.InArea(area.Id));
         editor.Title = " ";
         editor.Content = "Keep this draft";
@@ -195,7 +195,7 @@ public sealed class CoreEditorViewModelTests
         var area = new Area(AreaId.New(), new ParaContextName("Writing"));
         var editor = new CoreEditorViewModel(
             new CoreKnowledgeUseCases(new FakeRepository(EmptyState())),
-            () => Now);
+            () => _now);
         editor.BeginCreate(BrainItemKind.Note, PrimaryPlacement.InArea(area.Id));
         editor.Title = "Changed";
         editor.Content = "Changed content";
@@ -220,7 +220,7 @@ public sealed class CoreEditorViewModelTests
             saveException: new InvalidOperationException("Disk unavailable"));
         var editor = new CoreEditorViewModel(
             new CoreKnowledgeUseCases(repository),
-            () => Now);
+            () => _now);
         editor.BeginCreate(BrainItemKind.Note, PrimaryPlacement.InArea(area.Id));
         editor.Title = "Keep me";
         editor.Content = "Unsaved content";
@@ -254,7 +254,7 @@ public sealed class CoreEditorViewModelTests
                 editor.Capture.SourceType = CaptureSourceType.Article;
                 editor.Capture.SourceUrl = "https://example.com/source";
                 editor.Capture.SourceCitation = "Example source";
-                editor.Capture.ReminderAt = Now.AddDays(1);
+                editor.Capture.ReminderAt = _now.AddDays(1);
                 editor.Capture.ProcessingState = CaptureProcessingState.Referenced;
                 break;
             case BrainItemKind.ResourceArtifact:
@@ -374,7 +374,7 @@ public sealed class CoreEditorViewModelTests
             "Idea",
             "Idea content",
             PrimaryPlacement.InArea(areaId),
-            Now,
+            _now,
             ideaMaturity: IdeaMaturity.Captured);
 
     private static BrainItem CreateCapture(AreaId areaId) =>
@@ -384,7 +384,7 @@ public sealed class CoreEditorViewModelTests
             "Capture",
             "Capture content",
             PrimaryPlacement.InArea(areaId),
-            Now,
+            _now,
             captureSourceType: CaptureSourceType.Article,
             sourceUri: new Uri("https://example.com/capture"),
             sourceCitation: "Capture source",
@@ -397,7 +397,7 @@ public sealed class CoreEditorViewModelTests
             "Resource",
             "Resource content",
             PrimaryPlacement.InArea(areaId),
-            Now,
+            _now,
             resourceArtifactKind: ResourceArtifactKind.Guide,
             resourceFreshness: ResourceFreshness.Draft);
 
