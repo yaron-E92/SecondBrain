@@ -20,6 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\CoreEditorViewModels.cs"
+             Link="ViewModels\CoreEditorViewModels.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\DashboardViewModels.cs"
              Link="ViewModels\DashboardViewModels.cs" />
   </ItemGroup>
