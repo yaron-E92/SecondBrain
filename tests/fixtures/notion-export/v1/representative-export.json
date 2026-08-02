@@ -1,0 +1,215 @@
+{
+  "fixtureVersion": 1,
+  "synthetic": true,
+  "files": [
+    {
+      "fileName": "Projects.csv",
+      "database": "Projects",
+      "databaseNotionId": "10000000000000000000000000000001",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000001",
+          "name": "Launch sample atlas",
+          "status": "Active",
+          "priority": "High",
+          "startDate": "2026-01-05",
+          "dueDate": "2026-03-31",
+          "archived": false
+        }
+      ]
+    },
+    {
+      "fileName": "Areas.csv",
+      "database": "Areas",
+      "databaseNotionId": "10000000000000000000000000000002",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000002",
+          "name": "Learning lab",
+          "archived": false
+        }
+      ]
+    },
+    {
+      "fileName": "Notes.csv",
+      "database": "Notes",
+      "databaseNotionId": "10000000000000000000000000000003",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000003",
+          "name": "Synthetic field notes",
+          "content": "A deliberately fictional note for migration tests.",
+          "noteKind": "General",
+          "primaryType": "Area",
+          "primaryNotionId": "20000000000000000000000000000002",
+          "tags": ["Example", " migration ", "example"],
+          "linkNotionIds": ["2fffffffffffffffffffffffffffffff"],
+          "archived": true,
+          "isTemplate": false
+        },
+        {
+          "notionId": "2000000000000000000000000000000b",
+          "name": "New note template",
+          "content": "Synthetic template content.",
+          "noteKind": "General",
+          "primaryType": "Area",
+          "primaryNotionId": "20000000000000000000000000000002",
+          "tags": [],
+          "linkNotionIds": [],
+          "archived": false,
+          "isTemplate": true
+        }
+      ]
+    },
+    {
+      "fileName": "Ideas.csv",
+      "database": "Ideas",
+      "databaseNotionId": "10000000000000000000000000000004",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000004",
+          "name": "Fictional indexing idea",
+          "content": "Try a small synthetic index.",
+          "maturity": "Captured",
+          "primaryType": "Project",
+          "primaryNotionId": "20000000000000000000000000000001",
+          "tags": ["Example"],
+          "linkNotionIds": [],
+          "archived": false
+        }
+      ]
+    },
+    {
+      "fileName": "Journals.csv",
+      "database": "Journals",
+      "databaseNotionId": "10000000000000000000000000000005",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000005",
+          "name": "Synthetic day one",
+          "content": "A non-personal journal fixture.",
+          "entryDate": "2026-01-06",
+          "primaryType": "ResourceTopic",
+          "primaryNotionId": "20000000000000000000000000000007",
+          "tags": [],
+          "linkNotionIds": [],
+          "archived": false
+        }
+      ]
+    },
+    {
+      "fileName": "Captures.csv",
+      "database": "Captures",
+      "databaseNotionId": "10000000000000000000000000000006",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000006",
+          "name": "Example article capture",
+          "content": "Synthetic capture text.",
+          "sourceType": "Article",
+          "sourceUrl": "https://example.invalid/article",
+          "sourceCitation": "Example Invalid, synthetic fixture",
+          "processingState": "Captured",
+          "primaryType": "Area",
+          "primaryNotionId": "20000000000000000000000000000002",
+          "tags": ["Migration"],
+          "linkNotionIds": ["20000000000000000000000000000003"],
+          "archived": false
+        }
+      ]
+    },
+    {
+      "fileName": "Resources.csv",
+      "database": "Resources",
+      "databaseNotionId": "10000000000000000000000000000007",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000007",
+          "name": "Synthetic research topic",
+          "classification": "Topic",
+          "archived": false
+        },
+        {
+          "notionId": "20000000000000000000000000000008",
+          "name": "Synthetic reference guide",
+          "content": "A fictional resource artifact.",
+          "classification": "Artifact",
+          "artifactKind": "Guide",
+          "freshness": "Current",
+          "reviewDate": "2026-06-30",
+          "primaryType": "ResourceTopic",
+          "primaryNotionId": "20000000000000000000000000000007",
+          "tags": ["Example"],
+          "linkNotionIds": ["20000000000000000000000000000006"],
+          "archived": false
+        },
+        {
+          "notionId": "20000000000000000000000000000009",
+          "name": "Synthetic resource interpretation",
+          "content": "An authored interpretation, not source material.",
+          "classification": "Note",
+          "noteKind": "General",
+          "primaryType": "ResourceTopic",
+          "primaryNotionId": "20000000000000000000000000000007",
+          "tags": [],
+          "linkNotionIds": ["20000000000000000000000000000008"],
+          "archived": false
+        },
+        {
+          "notionId": "2000000000000000000000000000000a",
+          "name": "Needs a human classification",
+          "content": "This synthetic row is intentionally ambiguous.",
+          "classification": "",
+          "archived": false
+        }
+      ]
+    },
+    {
+      "fileName": "Notes_all.csv",
+      "database": "Notes",
+      "databaseNotionId": "10000000000000000000000000000003",
+      "rows": [
+        {
+          "notionId": "20000000000000000000000000000003",
+          "name": "Synthetic field notes"
+        }
+      ]
+    },
+    {
+      "fileName": "Tasks.csv",
+      "database": "Tasks",
+      "databaseNotionId": "10000000000000000000000000000008",
+      "moduleOwner": "ShuffleTask",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000001",
+          "name": "Synthetic task"
+        }
+      ]
+    },
+    {
+      "fileName": "Chores.csv",
+      "database": "Chores",
+      "databaseNotionId": "10000000000000000000000000000009",
+      "moduleOwner": "ShuffleTask",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000002",
+          "name": "Synthetic chore"
+        }
+      ]
+    },
+    {
+      "fileName": "Pantry.csv",
+      "database": "Pantry",
+      "databaseNotionId": "1000000000000000000000000000000a",
+      "moduleOwner": "PHOODAB",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000003",
+          "name": "Synthetic pantry record"
+        }
+      ]
+    }
+  ]
+}
