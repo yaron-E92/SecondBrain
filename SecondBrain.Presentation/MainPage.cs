@@ -28,7 +28,9 @@ public sealed class MainPage : ContentPage
             Text = "Save to Inbox",
             HorizontalOptions = LayoutOptions.End
         };
-        captureButton.Clicked += async (_, _) => await viewModel.CaptureAsync();
+        captureButton.SetBinding(
+            Button.CommandProperty,
+            nameof(viewModel.CaptureCommand));
 
         var captureStatus = new Label
         {
@@ -39,7 +41,6 @@ public sealed class MainPage : ContentPage
 
         var refreshView = new RefreshView
         {
-            Command = new Command(async () => await viewModel.LoadAsync()),
             Content = new ScrollView
             {
                 Content = new VerticalStackLayout
@@ -52,7 +53,7 @@ public sealed class MainPage : ContentPage
                         FailureState(
                             nameof(viewModel.HasError),
                             nameof(viewModel.ErrorMessage),
-                            viewModel.LoadAsync),
+                            nameof(viewModel.LoadCommand)),
                         LoadingState(nameof(viewModel.IsLoading)),
                         Section(
                             "Quick capture",
@@ -83,13 +84,16 @@ public sealed class MainPage : ContentPage
         refreshView.SetBinding(
             RefreshView.IsRefreshingProperty,
             nameof(viewModel.IsLoading));
+        refreshView.SetBinding(
+            RefreshView.CommandProperty,
+            nameof(viewModel.LoadCommand));
         Content = refreshView;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await viewModel.LoadAsync();
+        await viewModel.LoadCommand.ExecuteAsync(null);
     }
 
     private static View ProjectSection(DashboardViewModel viewModel)
@@ -299,7 +303,7 @@ public sealed class MainPage : ContentPage
     private static View FailureState(
         string visibilityProperty,
         string messageProperty,
-        Func<CancellationToken, Task> retry)
+        string retryCommandProperty)
     {
         var message = new Label { TextColor = Colors.DarkRed };
         message.SetBinding(Label.TextProperty, messageProperty);
@@ -308,7 +312,9 @@ public sealed class MainPage : ContentPage
             Text = "Retry",
             HorizontalOptions = LayoutOptions.Start
         };
-        retryButton.Clicked += async (_, _) => await retry(default);
+        retryButton.SetBinding(
+            Button.CommandProperty,
+            retryCommandProperty);
         var layout = new VerticalStackLayout
         {
             Spacing = 8,
@@ -400,7 +406,9 @@ public sealed class InboxPage : ContentPage
         retryButton.SetBinding(
             IsVisibleProperty,
             nameof(viewModel.HasError));
-        retryButton.Clicked += async (_, _) => await viewModel.LoadAsync();
+        retryButton.SetBinding(
+            Button.CommandProperty,
+            nameof(viewModel.LoadCommand));
 
         var loading = new ActivityIndicator
         {
@@ -460,6 +468,6 @@ public sealed class InboxPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await viewModel.LoadAsync();
+        await viewModel.LoadCommand.ExecuteAsync(null);
     }
 }

@@ -84,7 +84,7 @@ public sealed class DashboardUseCaseTests
             CaptureText = "Remember the architecture review"
         };
 
-        await dashboard.CaptureAsync();
+        await dashboard.CaptureCommand.ExecuteAsync(null);
 
         Assert.Multiple(() =>
         {
@@ -111,9 +111,9 @@ public sealed class DashboardUseCaseTests
             emptyUseCase,
             emptyInbox);
 
-        await emptyDashboard.LoadAsync();
+        await emptyDashboard.LoadCommand.ExecuteAsync(null);
         emptyDashboard.CaptureText = " ";
-        await emptyDashboard.CaptureAsync();
+        await emptyDashboard.CaptureCommand.ExecuteAsync(null);
 
         var failingUseCase = new DashboardUseCase(
             new FakeRepository(
@@ -124,8 +124,8 @@ public sealed class DashboardUseCaseTests
             failingUseCase,
             failingInbox);
 
-        await failingDashboard.LoadAsync();
-        await failingInbox.LoadAsync();
+        await failingDashboard.LoadCommand.ExecuteAsync(null);
+        await failingInbox.LoadCommand.ExecuteAsync(null);
 
         Assert.Multiple(() =>
         {
