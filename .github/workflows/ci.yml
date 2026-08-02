@@ -145,8 +145,11 @@ jobs:
       - name: Create Android emulator
         shell: bash
         run: |
-          sdkmanager "platform-tools" "emulator" "system-images;android-35;google_apis;x86_64"
-          echo no | avdmanager create avd \
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             --force \
             --name secondbrain-ci \
             --package "system-images;android-35;google_apis;x86_64" \
@@ -156,16 +159,16 @@ jobs:
         shell: bash
         run: |
           sudo chmod 666 /dev/kvm
-          nohup emulator \
+          nohup "$ANDROID_HOME/emulator/emulator" \
             -avd secondbrain-ci \
             -no-window \
             -no-audio \
             -no-boot-anim \
             -gpu swiftshader_indirect \
             > "$RUNNER_TEMP/android-emulator.log" 2>&1 &
-          timeout 180 adb wait-for-device
+          timeout 180 "$ANDROID_HOME/platform-tools/adb" wait-for-device
           for attempt in {1..120}; do
-            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+            if [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
               exit 0
             fi
             sleep 5
@@ -182,12 +185,12 @@ jobs:
             -f net10.0-android \
             -t:Run
           for attempt in {1..30}; do
-            if [ -n "$(adb shell pidof com.secondbrain.app | tr -d '\r')" ]; then
+            if [ -n "$("$ANDROID_HOME/platform-tools/adb" shell pidof com.secondbrain.app | tr -d '\r')" ]; then
               exit 0
             fi
             sleep 2
           done
-          adb logcat -d
+          "$ANDROID_HOME/platform-tools/adb" logcat -d
           exit 1
 
       - name: Show emulator log on failure
