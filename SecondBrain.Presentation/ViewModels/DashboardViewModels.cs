@@ -33,6 +33,11 @@ public sealed partial class DashboardViewModel(
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
 
+    // RefreshView executes its command when this becomes true, so it must not
+    // share state with the general-purpose loading indicator.
+    [ObservableProperty]
+    public partial bool IsRefreshing { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     public partial string? ErrorMessage { get; set; }
@@ -64,6 +69,10 @@ public sealed partial class DashboardViewModel(
                 cancellationToken);
             Apply(snapshot);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A superseded or explicitly canceled load is not a user-facing failure.
+        }
         catch (Exception exception)
         {
             ErrorMessage =
@@ -72,6 +81,7 @@ public sealed partial class DashboardViewModel(
         finally
         {
             IsLoading = false;
+            IsRefreshing = false;
         }
     }
 
@@ -99,6 +109,10 @@ public sealed partial class DashboardViewModel(
                 new GetDashboardQuery(),
                 cancellationToken);
             Apply(snapshot);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A superseded or explicitly canceled capture is not a save failure.
         }
         catch (Exception exception)
         {
@@ -153,6 +167,10 @@ public sealed partial class InboxViewModel(DashboardUseCase dashboardUseCase)
             Replace(await dashboardUseCase.GetInboxAsync(
                 new GetInboxQuery(),
                 cancellationToken));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A superseded or explicitly canceled load is not a user-facing failure.
         }
         catch (Exception exception)
         {

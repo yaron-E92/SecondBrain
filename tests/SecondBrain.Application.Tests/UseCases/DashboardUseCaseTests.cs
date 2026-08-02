@@ -146,6 +146,35 @@ public sealed class DashboardUseCaseTests
         });
     }
 
+    [Test]
+    public async Task CanceledLoad_DoesNotTreatLoadingAsRefreshOrSurfaceAnError()
+    {
+        var repository = new CancellationAwareRepository();
+        var useCase = new DashboardUseCase(repository);
+        var dashboard = new DashboardViewModel(
+            useCase,
+            new InboxViewModel(useCase));
+
+        var load = dashboard.LoadCommand.ExecuteAsync(null);
+        await repository.LoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dashboard.IsLoading, Is.True);
+            Assert.That(dashboard.IsRefreshing, Is.False);
+        });
+
+        dashboard.LoadCommand.Cancel();
+        await load.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dashboard.IsLoading, Is.False);
+            Assert.That(dashboard.IsRefreshing, Is.False);
+            Assert.That(dashboard.HasError, Is.False);
+        });
+    }
+
     private static BrainItem CreateIdea(
         AreaId areaId,
         string title,
@@ -184,5 +213,24 @@ public sealed class DashboardUseCaseTests
             SaveCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class CancellationAwareRepository : ICoreKnowledgeRepository
+    {
+        public TaskCompletionSource LoadStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<CoreKnowledgeState> LoadStateAsync(
+            CancellationToken cancellationToken = default)
+        {
+            LoadStarted.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return EmptyState();
+        }
+
+        public Task SaveStateAsync(
+            CoreKnowledgeState state,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

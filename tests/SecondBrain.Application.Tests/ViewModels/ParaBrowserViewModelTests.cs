@@ -216,7 +216,34 @@ public sealed class ParaBrowserViewModelTests
         });
     }
 
-    private static ParaBrowserViewModel CreateViewModel(FakeRepository repository) =>
+    [Test]
+    public async Task CanceledLoad_DoesNotTreatLoadingAsRefreshOrSurfaceAnError()
+    {
+        var repository = new CancellationAwareRepository();
+        var viewModel = CreateViewModel(repository);
+
+        var load = viewModel.LoadCommand.ExecuteAsync(null);
+        await repository.LoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsLoading, Is.True);
+            Assert.That(viewModel.IsRefreshing, Is.False);
+        });
+
+        viewModel.LoadCommand.Cancel();
+        await load.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsLoading, Is.False);
+            Assert.That(viewModel.IsRefreshing, Is.False);
+            Assert.That(viewModel.HasError, Is.False);
+        });
+    }
+
+    private static ParaBrowserViewModel CreateViewModel(
+        ICoreKnowledgeRepository repository) =>
         new(
             repository,
             new CoreKnowledgeUseCases(repository),
@@ -286,5 +313,24 @@ public sealed class ParaBrowserViewModelTests
             SaveCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class CancellationAwareRepository : ICoreKnowledgeRepository
+    {
+        public TaskCompletionSource LoadStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<CoreKnowledgeState> LoadStateAsync(
+            CancellationToken cancellationToken = default)
+        {
+            LoadStarted.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return EmptyState();
+        }
+
+        public Task SaveStateAsync(
+            CoreKnowledgeState state,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

@@ -126,6 +126,11 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
 
+    // RefreshView executes its command when this becomes true, so it must not
+    // share state with the general-purpose loading indicator.
+    [ObservableProperty]
+    public partial bool IsRefreshing { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     public partial string? ErrorMessage { get; set; }
@@ -376,6 +381,10 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
                     context.Id == contextKey.Value.Id) ?? Contexts.FirstOrDefault();
             ApplyFilters(preferredItemId);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A superseded or explicitly canceled load is not a user-facing failure.
+        }
         catch (Exception exception)
         {
             ErrorMessage = $"PARA content could not be loaded. {exception.Message}";
@@ -383,6 +392,7 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+            IsRefreshing = false;
         }
     }
 
