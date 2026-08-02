@@ -16,9 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  DOTNET_VERSION: '10.0.x'
-
 jobs:
   build-and-test:
     name: Restore, build, and test
@@ -34,7 +31,7 @@ jobs:
         id: setup-dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
 
       - name: Restore cached .NET workloads
         id: restore-dotnet-workloads
@@ -105,3 +102,95 @@ jobs:
 
       - name: Test
         run: dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore
+
+  linux-android-build-and-smoke-test:
+    name: Linux Android build and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '21'
+
+      - name: Restore MAUI Android workload
+        run: dotnet workload restore SecondBrain.App/SecondBrain.App.csproj --skip-manifest-update
+
+      - name: Install Android dependencies
+        run: >-
+          dotnet build SecondBrain.App/SecondBrain.App.csproj
+          -t:InstallAndroidDependencies
+          -f net10.0-android
+          -p:AcceptAndroidSdkLicenses=true
+
+      - name: Restore dependencies
+        run: dotnet restore SecondBrain.slnx
+
+      - name: Build
+        run: dotnet build SecondBrain.slnx --configuration Debug --no-restore
+
+      - name: Test
+        run: dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore
+
+      - name: Create Android emulator
+        shell: bash
+        run: |
+          sdkmanager "platform-tools" "emulator" "system-images;android-35;google_apis;x86_64"
+          echo no | avdmanager create avd \
+            --force \
+            --name secondbrain-ci \
+            --package "system-images;android-35;google_apis;x86_64" \
+            --device pixel
+
+      - name: Start Android emulator
+        shell: bash
+        run: |
+          sudo chmod 666 /dev/kvm
+          nohup emulator \
+            -avd secondbrain-ci \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -gpu swiftshader_indirect \
+            > "$RUNNER_TEMP/android-emulator.log" 2>&1 &
+          timeout 180 adb wait-for-device
+          for attempt in {1..120}; do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          cat "$RUNNER_TEMP/android-emulator.log"
+          exit 1
+
+      - name: Run Android smoke test
+        shell: bash
+        run: |
+          dotnet build SecondBrain.App/SecondBrain.App.csproj \
+            --configuration Debug \
+            --no-restore \
+            -f net10.0-android \
+            -t:Run
+          for attempt in {1..30}; do
+            if [ -n "$(adb shell pidof com.secondbrain.app | tr -d '\r')" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          adb logcat -d
+          exit 1
+
+      - name: Show emulator log on failure
+        if: failure()
+        shell: bash
+        run: cat "$RUNNER_TEMP/android-emulator.log" || true

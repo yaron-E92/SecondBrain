@@ -19,8 +19,9 @@ pattern. Test projects use `SecondBrain.<Area>.Tests` and remain under `tests/`.
 Concrete Brain projects, UI applications, and optional modules are added only by
 their dedicated roadmap issues.
 
-The root `global.json` pins the .NET 10 SDK, while `Directory.Build.props`
-provides shared framework, nullable-reference-type, and implicit-using defaults.
+The root `global.json` selects the .NET 10.0.200 SDK feature band and rolls
+forward to its latest installed patch. `Directory.Build.props` provides shared
+framework, nullable-reference-type, and implicit-using defaults.
 
 ## MAUI shell
 
@@ -33,5 +34,29 @@ the Android SDK and JDK are resolved from `$DOTNET_ROOT/android-sdk` and
 ```bash
 dotnet workload restore SecondBrain.App/SecondBrain.App.csproj
 dotnet restore SecondBrain.App/SecondBrain.App.csproj
-dotnet build SecondBrain.App/SecondBrain.App.csproj --no-restore
+dotnet build SecondBrain.App/SecondBrain.App.csproj --configuration Debug --no-restore
+```
+
+On Ubuntu, install Microsoft OpenJDK 21 and make the Android SDK available
+through `ANDROID_HOME` or `ANDROID_SDK_ROOT`. Install the SDK components required
+by the project with:
+
+```bash
+dotnet build SecondBrain.App/SecondBrain.App.csproj \
+  -t:InstallAndroidDependencies \
+  -f net10.0-android \
+  -p:AcceptAndroidSdkLicenses=true
+```
+
+The Linux CI job runs that setup, builds and tests the solution, boots an
+Android emulator, runs the app, and verifies the `com.secondbrain.app` process.
+With an emulator running or a device attached, use the same smoke-test command
+locally:
+
+```bash
+dotnet build SecondBrain.App/SecondBrain.App.csproj \
+  --configuration Debug \
+  --no-restore \
+  -f net10.0-android \
+  -t:Run
 ```

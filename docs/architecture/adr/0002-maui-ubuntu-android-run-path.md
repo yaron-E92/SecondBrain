@@ -46,6 +46,12 @@ dotnet build SecondBrain.App/SecondBrain.App.csproj --configuration Debug --no-r
 
 This is an Android command, not a native Linux desktop run command.
 
+The repository's Linux CI job exercises this workflow on Ubuntu: it restores
+the workload and Android dependencies, builds and tests the solution, starts a
+bounded Android emulator, invokes the `Run` target, and verifies that the
+`com.secondbrain.app` process is running. This makes the Linux Android path a
+tested repository contract rather than a documentation-only procedure.
+
 ## Environment Prerequisites and Blockers
 
 The remaining blockers for an Ubuntu Android run are environment prerequisites,
