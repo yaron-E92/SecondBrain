@@ -126,7 +126,7 @@ jobs:
             /usr/share/dotnet/packs/Microsoft.Maui.*
             /usr/share/dotnet/sdk-manifests
             /usr/share/dotnet/metadata/workloads
-          key: ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-${{ hashFiles('global.json', 'SecondBrain.App/SecondBrain.App.csproj') }}
+          key: ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
           restore-keys: |
             ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-
 
@@ -151,16 +151,16 @@ jobs:
             /usr/local/lib/android/sdk/emulator
             /usr/local/lib/android/sdk/platform-tools
             /usr/local/lib/android/sdk/system-images/android-35/google_apis/x86_64
-          key: ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v1-${{ hashFiles('global.json', 'SecondBrain.App/SecondBrain.App.csproj') }}
+          key: ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v1-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
           restore-keys: |
             ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v1-
 
       - name: Restore MAUI Android workload
-        run: dotnet workload restore SecondBrain.App/SecondBrain.App.csproj --skip-manifest-update
+        run: dotnet workload restore SecondBrain.Presentation/SecondBrain.Presentation.csproj --skip-manifest-update
 
       - name: Install Android dependencies
         run: >-
-          dotnet build SecondBrain.App/SecondBrain.App.csproj
+          dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj
           -t:InstallAndroidDependencies
           -f net10.0-android
           -p:AcceptAndroidSdkLicenses=true
@@ -216,7 +216,7 @@ jobs:
       - name: Run Android smoke test
         shell: bash
         run: |
-          dotnet build SecondBrain.App/SecondBrain.App.csproj \
+          dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj \
             --configuration Debug \
             --no-restore \
             -f net10.0-android \

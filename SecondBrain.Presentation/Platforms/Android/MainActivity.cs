@@ -1,7 +1,7 @@
 using Android.App;
 using Android.Content.PM;
 
-namespace SecondBrain.App;
+namespace SecondBrain.Presentation;
 
 [Activity(
     MainLauncher = true,

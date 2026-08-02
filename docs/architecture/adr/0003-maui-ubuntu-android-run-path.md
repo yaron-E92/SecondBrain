@@ -5,7 +5,7 @@
 
 ## Context
 
-`SecondBrain.App/SecondBrain.App.csproj` is the existing MAUI presentation and
+`SecondBrain.Presentation/SecondBrain.Presentation.csproj` is the existing MAUI presentation and
 composition-root project. It targets `net10.0-android`. .NET MAUI does not
 provide a native Linux desktop target, so Ubuntu supports this repository's
 MAUI development path through Android on an emulator or attached device.
@@ -14,7 +14,7 @@ systems and runners.
 
 ## Decision
 
-`SecondBrain.App` composes the app shell, navigation integration, dependency
+`SecondBrain.Presentation` composes the app shell, navigation integration, dependency
 injection, and the translation of shared MAUI presentation surfaces into
 SecondBrain runtime behavior. It may reference shared MAUI presentation work
 and the existing application contracts. Domain, application, persistence, and
@@ -22,7 +22,7 @@ optional-module boundaries remain owned by their existing projects and must not
 be moved into the MAUI host.
 
 Shared MAUI presentation work should expose UI surfaces, view models, services,
-or registration hooks that `SecondBrain.App` can opt into. It must not require
+or registration hooks that `SecondBrain.Presentation` can opt into. It must not require
 SecondBrain core projects to depend on concrete presentation projects, and it
 must not bypass module opt-in, permissions, or data-access boundaries.
 
@@ -32,16 +32,16 @@ From the repository root, restore the workload and project dependencies, then
 build the Android app:
 
 ```bash
-dotnet workload restore SecondBrain.App/SecondBrain.App.csproj
-dotnet restore SecondBrain.App/SecondBrain.App.csproj
-dotnet build SecondBrain.App/SecondBrain.App.csproj --configuration Debug --no-restore
+dotnet workload restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
+dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore
 ```
 
 With an Android emulator running or a device attached, the Android smoke test
 uses the MAUI Android `Run` target:
 
 ```bash
-dotnet build SecondBrain.App/SecondBrain.App.csproj --configuration Debug --no-restore -f net10.0-android -t:Run
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore -f net10.0-android -t:Run
 ```
 
 This is an Android command, not a native Linux desktop run command.
