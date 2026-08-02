@@ -74,5 +74,59 @@ the Android SDK and JDK are resolved from `$DOTNET_ROOT/android-sdk` and
 ```bash
 dotnet workload restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
 dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
-dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --no-restore
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore
 ```
+
+On Ubuntu, install Microsoft OpenJDK 21 and make the Android SDK available
+through `ANDROID_HOME` or `ANDROID_SDK_ROOT`. Install the SDK components required
+by the project with:
+
+```bash
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj \
+  -t:InstallAndroidDependencies \
+  -f net10.0-android \
+  -p:AcceptAndroidSdkLicenses=true
+```
+
+The Linux CI job runs that setup, builds and tests the solution, boots an
+Android emulator, runs the app, and verifies the `com.secondbrain.app` process.
+With an emulator running or a device attached, use the same smoke-test command
+locally:
+
+```bash
+dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj \
+  --configuration Debug \
+  --no-restore \
+  -f net10.0-android \
+  -t:Run
+```
+
+To set everything up, launch SecondBrain in a visible emulator, and leave that
+emulator running for interactive use:
+
+```bash
+./scripts/run-linux-android.sh
+```
+
+The launcher creates or reuses the `secondbrain-test` x86_64 API 35 emulator.
+After it reports that SecondBrain is running, use the app normally in the
+emulator window. Stop the emulator when finished with:
+
+```bash
+"${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platform-tools/adb" -s emulator-5554 emu kill
+```
+
+For a development-only, headless end-to-end check, the repository also provides
+a smoke script that restores the workload and Android dependencies, builds the
+app, uses an attached Android device when one is available or creates and starts
+an x86_64 API 35 emulator, launches SecondBrain, verifies its process, and then
+stops an emulator that it started:
+
+```bash
+./scripts/test-linux-android.sh
+```
+
+The scripts require `dotnet`, a JDK, `ANDROID_HOME` or `ANDROID_SDK_ROOT`, and
+Android command-line tools. Hardware-accelerated emulator use also requires
+access to `/dev/kvm`. They are development utilities and are not part of a
+release artifact.

@@ -20,3 +20,4 @@ Each ADR uses the following sections:
 
 - [ADR 0001: Modular app family strategy](0001-modular-app-family-strategy.md) - Accepted
 - [ADR 0002: PARA knowledge model and ownership boundaries](0002-para-knowledge-model-and-ownership-boundaries.md) - Accepted
+- [ADR 0003: MAUI Ubuntu Android run path](0003-maui-ubuntu-android-run-path.md) - Accepted
