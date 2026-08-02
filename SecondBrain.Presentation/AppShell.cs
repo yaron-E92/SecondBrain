@@ -2,7 +2,10 @@ namespace SecondBrain.Presentation;
 
 public sealed class AppShell : Shell
 {
-    public AppShell(MainPage mainPage, InboxPage inboxPage)
+    public AppShell(
+        MainPage mainPage,
+        InboxPage inboxPage,
+        CoreEditorPage coreEditorPage)
     {
         Title = "SecondBrain";
 
@@ -21,6 +24,12 @@ public sealed class AppShell : Shell
                     Route = "inbox",
                     Title = "Inbox",
                     Content = inboxPage
+                },
+                new ShellContent
+                {
+                    Route = "editor",
+                    Title = "Editor",
+                    Content = coreEditorPage
                 }
             }
         });
