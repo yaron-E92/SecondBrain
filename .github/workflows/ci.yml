@@ -121,14 +121,24 @@ jobs:
       - name: Cache .NET workloads
         uses: actions/cache@v4
         with:
-          path: |
-            /usr/share/dotnet/packs/Microsoft.Android.*
-            /usr/share/dotnet/packs/Microsoft.Maui.*
-            /usr/share/dotnet/sdk-manifests
-            /usr/share/dotnet/metadata/workloads
-          key: ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
+          path: ${{ runner.temp }}/dotnet-workload-cache
+          key: ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-v2-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
           restore-keys: |
-            ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-
+            ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-v2-
+
+      - name: Restore .NET workload files
+        shell: bash
+        run: |
+          workload_cache="$RUNNER_TEMP/dotnet-workload-cache"
+          if [ -d "$workload_cache/packs" ]; then
+            sudo cp -a "$workload_cache/packs/." /usr/share/dotnet/packs/
+          fi
+          if [ -d "$workload_cache/sdk-manifests" ]; then
+            sudo cp -a "$workload_cache/sdk-manifests/." /usr/share/dotnet/sdk-manifests/
+          fi
+          if [ -d "$workload_cache/metadata" ]; then
+            sudo cp -a "$workload_cache/metadata/." /usr/share/dotnet/metadata/
+          fi
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -147,16 +157,44 @@ jobs:
       - name: Cache Android SDK and emulator
         uses: actions/cache@v4
         with:
-          path: |
-            /usr/local/lib/android/sdk/emulator
-            /usr/local/lib/android/sdk/platform-tools
-            /usr/local/lib/android/sdk/system-images/android-35/google_apis/x86_64
-          key: ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v1-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
+          path: ${{ runner.temp }}/android-sdk-cache
+          key: ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v2-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
           restore-keys: |
-            ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v1-
+            ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v2-
+
+      - name: Restore Android SDK files
+        shell: bash
+        run: |
+          android_cache="$RUNNER_TEMP/android-sdk-cache"
+          if [ -d "$android_cache" ]; then
+            sudo cp -a "$android_cache/." "$ANDROID_HOME/"
+          fi
 
       - name: Restore MAUI Android workload
         run: dotnet workload restore SecondBrain.Presentation/SecondBrain.Presentation.csproj --skip-manifest-update
+
+      - name: Stage .NET workload cache
+        shell: bash
+        run: |
+          workload_cache="$RUNNER_TEMP/dotnet-workload-cache"
+          mkdir -p "$workload_cache/packs" "$workload_cache/sdk-manifests" "$workload_cache/metadata"
+          for pack in /usr/share/dotnet/packs/Microsoft.Android.* /usr/share/dotnet/packs/Microsoft.Maui.*; do
+            if [ -d "$pack" ]; then
+              cp -a "$pack" "$workload_cache/packs/"
+            fi
+          done
+          for feature_band in /usr/share/dotnet/sdk-manifests/*; do
+            for manifest in microsoft.net.sdk.android microsoft.net.sdk.maui; do
+              if [ -d "$feature_band/$manifest" ]; then
+                cached_feature_band="$workload_cache/sdk-manifests/$(basename "$feature_band")"
+                mkdir -p "$cached_feature_band"
+                cp -a "$feature_band/$manifest" "$cached_feature_band/"
+              fi
+            done
+          done
+          if [ -d /usr/share/dotnet/metadata/workloads ]; then
+            cp -a /usr/share/dotnet/metadata/workloads "$workload_cache/metadata/"
+          fi
 
       - name: Install Android dependencies
         run: >-
@@ -189,6 +227,16 @@ jobs:
             --name secondbrain-ci \
             --package "system-images;android-35;google_apis;x86_64" \
             --device pixel
+
+      - name: Stage Android SDK cache
+        shell: bash
+        run: |
+          android_cache="$RUNNER_TEMP/android-sdk-cache"
+          mkdir -p "$android_cache/system-images/android-35/google_apis"
+          cp -a "$ANDROID_HOME/emulator" "$android_cache/"
+          cp -a "$ANDROID_HOME/platform-tools" "$android_cache/"
+          cp -a "$ANDROID_HOME/system-images/android-35/google_apis/x86_64" \
+            "$android_cache/system-images/android-35/google_apis/"
 
       - name: Start Android emulator
         shell: bash
