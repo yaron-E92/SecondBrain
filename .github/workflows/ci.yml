@@ -170,6 +170,10 @@ jobs:
             sudo cp -a "$android_cache/." "$ANDROID_HOME/"
           fi
 
+      - name: Validate Linux Android scripts
+        shell: bash
+        run: bash -n scripts/test-linux-android.sh scripts/run-linux-android.sh
+
       - name: Build and run SecondBrain on Android
         shell: bash
         env:

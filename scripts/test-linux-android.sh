@@ -12,6 +12,19 @@ readonly avd_name="${SECOND_BRAIN_AVD_NAME:-secondbrain-test}"
 readonly emulator_port="${SECOND_BRAIN_EMULATOR_PORT:-5554}"
 readonly emulator_serial="emulator-${emulator_port}"
 readonly emulator_log="${SECOND_BRAIN_EMULATOR_LOG:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secondbrain-android-emulator.log}"
+readonly headless="${SECOND_BRAIN_HEADLESS:-true}"
+readonly keep_emulator="${SECOND_BRAIN_KEEP_EMULATOR:-false}"
+readonly force_emulator="${SECOND_BRAIN_FORCE_EMULATOR:-false}"
+
+emulator_gpu="${SECOND_BRAIN_EMULATOR_GPU:-}"
+if [[ -z "$emulator_gpu" ]]; then
+  if [[ "$headless" == true ]]; then
+    emulator_gpu=swiftshader_indirect
+  else
+    emulator_gpu=auto
+  fi
+fi
+readonly emulator_gpu
 
 started_emulator=false
 selected_device=""
@@ -22,7 +35,7 @@ fail() {
 }
 
 cleanup() {
-  if [[ "$started_emulator" == true ]]; then
+  if [[ "$started_emulator" == true && "$keep_emulator" != true ]]; then
     "$adb" -s "$emulator_serial" emu kill >/dev/null 2>&1 || true
   fi
 }
@@ -40,7 +53,7 @@ show_diagnostics() {
 trap cleanup EXIT
 trap show_diagnostics ERR
 
-[[ "$(uname -s)" == Linux ]] || fail "this smoke test must run on Linux"
+[[ "$(uname -s)" == Linux ]] || fail "this Android script must run on Linux"
 [[ -f "$project_path" ]] || fail "MAUI project not found at $project_path"
 command -v dotnet >/dev/null || fail ".NET SDK is required"
 command -v java >/dev/null || fail "a JDK is required; Microsoft OpenJDK 21 is used in CI"
@@ -75,7 +88,11 @@ dotnet build "$project_path" --configuration Debug --no-restore
 [[ -x "$emulator" ]] || fail "emulator not found at $emulator after installing Android components"
 
 "$adb" start-server >/dev/null
-selected_device="$("$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
+if [[ "$force_emulator" == true ]]; then
+  selected_device="$("$adb" devices | awk -v serial="$emulator_serial" '$1 == serial && $2 == "device" { print $1; exit }')"
+else
+  selected_device="$("$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
+fi
 
 if [[ -z "$selected_device" ]]; then
   if [[ -e /dev/kvm && ! -w /dev/kvm ]]; then
@@ -98,14 +115,18 @@ if [[ -z "$selected_device" ]]; then
       --device pixel
   fi
 
-  nohup "$emulator" \
-    -avd "$avd_name" \
-    -port "$emulator_port" \
-    -no-window \
-    -no-audio \
-    -no-boot-anim \
-    -gpu swiftshader_indirect \
-    > "$emulator_log" 2>&1 &
+  emulator_arguments=(
+    -avd "$avd_name"
+    -port "$emulator_port"
+    -no-audio
+    -no-boot-anim
+    -gpu "$emulator_gpu"
+  )
+  if [[ "$headless" == true ]]; then
+    emulator_arguments+=(-no-window)
+  fi
+
+  nohup "$emulator" "${emulator_arguments[@]}" > "$emulator_log" 2>&1 &
   started_emulator=true
   selected_device="$emulator_serial"
 
@@ -132,6 +153,10 @@ dotnet build "$project_path" \
 for _ in {1..30}; do
   if [[ -n "$("$adb" -s "$selected_device" shell pidof "$application_id" 2>/dev/null | tr -d '\r')" ]]; then
     echo "SecondBrain is running on $selected_device."
+    if [[ "$started_emulator" == true && "$keep_emulator" == true ]]; then
+      echo "The emulator will remain running for interactive use."
+      echo "Stop it with: $adb -s $selected_device emu kill"
+    fi
     exit 0
   fi
   sleep 2
