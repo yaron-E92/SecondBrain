@@ -46,11 +46,13 @@ dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configur
 
 This is an Android command, not a native Linux desktop run command.
 
-The repository's Linux CI job exercises this workflow on Ubuntu: it restores
-the workload and Android dependencies, builds and tests the solution, starts a
-bounded Android emulator, invokes the `Run` target, and verifies that the
-`com.secondbrain.app` process is running. This makes the Linux Android path a
-tested repository contract rather than a documentation-only procedure.
+The repository's development-only `scripts/test-linux-android.sh` smoke script
+automates the app-specific workflow. It uses an attached device when available
+or creates and starts an x86_64 API 35 emulator, invokes the `Run` target, and
+verifies that the `com.secondbrain.app` process is running. The Linux CI job
+executes that script on Ubuntu before building and testing the solution. This
+makes the Linux Android path a tested repository contract rather than a
+documentation-only procedure.
 
 ## Environment Prerequisites and Blockers
 

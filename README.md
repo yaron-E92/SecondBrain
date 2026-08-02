@@ -100,3 +100,17 @@ dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj \
   -f net10.0-android \
   -t:Run
 ```
+
+For a development-only end-to-end check on Linux, the repository also provides
+a script that restores the workload and Android dependencies, builds the app,
+uses an attached Android device when one is available or creates and starts an
+x86_64 API 35 emulator, launches SecondBrain, and verifies its process:
+
+```bash
+./scripts/test-linux-android.sh
+```
+
+The script requires `dotnet`, a JDK, `ANDROID_HOME` or `ANDROID_SDK_ROOT`, and
+Android command-line tools. Hardware-accelerated emulator use also requires
+access to `/dev/kvm`. It is a smoke-test utility and is not part of a release
+artifact.
