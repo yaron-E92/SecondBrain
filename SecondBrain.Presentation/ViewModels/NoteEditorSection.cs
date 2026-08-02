@@ -6,5 +6,5 @@ namespace SecondBrain.Presentation.ViewModels;
 public sealed partial class NoteEditorSection : ObservableObject
 {
     [ObservableProperty]
-    private NoteKind _kind = NoteKind.General;
+    public partial NoteKind Kind { get; set; } = NoteKind.General;
 }

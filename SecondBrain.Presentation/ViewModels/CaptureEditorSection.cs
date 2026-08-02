@@ -6,18 +6,19 @@ namespace SecondBrain.Presentation.ViewModels;
 public sealed partial class CaptureEditorSection : ObservableObject
 {
     [ObservableProperty]
-    private CaptureSourceType _sourceType = CaptureSourceType.Article;
+    public partial CaptureSourceType SourceType { get; set; } =
+        CaptureSourceType.Article;
 
     [ObservableProperty]
-    private string _sourceUrl = string.Empty;
+    public partial string SourceUrl { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _sourceCitation = string.Empty;
+    public partial string SourceCitation { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private DateTimeOffset? _reminderAt;
+    public partial DateTimeOffset? ReminderAt { get; set; }
 
     [ObservableProperty]
-    private CaptureProcessingState _processingState =
+    public partial CaptureProcessingState ProcessingState { get; set; } =
         CaptureProcessingState.Captured;
 }

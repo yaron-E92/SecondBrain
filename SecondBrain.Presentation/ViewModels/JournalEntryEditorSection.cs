@@ -6,8 +6,8 @@ namespace SecondBrain.Presentation.ViewModels;
 public sealed partial class JournalEntryEditorSection : ObservableObject
 {
     [ObservableProperty]
-    private SecondBrainItemId? _journalId;
+    public partial SecondBrainItemId? JournalId { get; set; }
 
     [ObservableProperty]
-    private DateOnly? _occurrenceDate;
+    public partial DateOnly? OccurrenceDate { get; set; }
 }

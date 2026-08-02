@@ -6,5 +6,5 @@ namespace SecondBrain.Presentation.ViewModels;
 public sealed partial class IdeaEditorSection : ObservableObject
 {
     [ObservableProperty]
-    private IdeaMaturity _maturity = IdeaMaturity.Captured;
+    public partial IdeaMaturity Maturity { get; set; } = IdeaMaturity.Captured;
 }
