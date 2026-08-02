@@ -77,6 +77,20 @@ public sealed class ProjectDependencyTests
         Assert.That(violations, Is.Empty, string.Join(Environment.NewLine, violations));
     }
 
+    [Test]
+    public void Abstractions_have_no_production_project_dependencies()
+    {
+        var abstractionsProjects = LoadProductionProjects()
+            .Where(project => project.Layer == ArchitectureLayer.Abstractions)
+            .ToArray();
+
+        Assert.That(abstractionsProjects, Is.Not.Empty);
+        Assert.That(
+            abstractionsProjects.SelectMany(project => project.ReferencePaths),
+            Is.Empty,
+            "Abstractions must not depend on concrete modules or any other production layer.");
+    }
+
     private static IReadOnlyList<ProjectInfo> LoadProductionProjects()
     {
         var repositoryRoot = FindRepositoryRoot();
