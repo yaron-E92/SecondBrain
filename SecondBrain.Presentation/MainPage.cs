@@ -83,7 +83,7 @@ public sealed class MainPage : ContentPage
         };
         refreshView.SetBinding(
             RefreshView.IsRefreshingProperty,
-            nameof(viewModel.IsLoading));
+            nameof(viewModel.IsRefreshing));
         refreshView.SetBinding(
             RefreshView.CommandProperty,
             nameof(viewModel.LoadCommand));

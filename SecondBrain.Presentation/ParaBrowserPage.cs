@@ -37,7 +37,7 @@ public sealed class ParaBrowserPage : ContentPage
         };
         ((RefreshView)Content).SetBinding(
             RefreshView.IsRefreshingProperty,
-            nameof(viewModel.IsLoading));
+            nameof(viewModel.IsRefreshing));
         ((RefreshView)Content).SetBinding(
             RefreshView.CommandProperty,
             nameof(viewModel.LoadCommand));
