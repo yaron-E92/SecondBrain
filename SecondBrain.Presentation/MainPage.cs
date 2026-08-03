@@ -151,7 +151,9 @@ public sealed class MainPage : ContentPage
             HorizontalOptions = LayoutOptions.Start
         };
         manageProjects.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync("//para");
+            await Shell.Current.GoToAsync(
+                "//para",
+                new Dictionary<string, object> { ["mode"] = "browse" });
 
         return Section(
             "Current Projects",
