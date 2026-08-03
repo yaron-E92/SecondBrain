@@ -65,6 +65,13 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
+        if (TryGetQueryValue(query, "mode", out var mode) &&
+            string.Equals(mode, "browse", StringComparison.OrdinalIgnoreCase))
+        {
+            _viewModel.CloseWorkspace();
+            return;
+        }
+
         if (!TryGetQueryValue(query, "contextKind", out var kindValue) ||
             !Enum.TryParse<ParaContextKind>(kindValue, true, out var kind) ||
             !TryGetQueryValue(query, "contextId", out var idValue) ||
@@ -304,6 +311,7 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
                     nameof(_viewModel.WorkspaceJournalEntries),
                     nameof(_viewModel.AreWorkspaceJournalEntriesEmpty)),
                 openItem,
+                Details(),
                 relatedSection,
                 Organize()
             }

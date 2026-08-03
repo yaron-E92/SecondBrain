@@ -180,7 +180,9 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             HorizontalOptions = LayoutOptions.Start
         };
         createContext.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync("//para");
+            await Shell.Current.GoToAsync(
+                "//para",
+                new Dictionary<string, object> { ["mode"] = "browse" });
 
         var openPlacement = new Button
         {
