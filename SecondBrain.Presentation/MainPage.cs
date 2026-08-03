@@ -127,11 +127,20 @@ public sealed class MainPage : ContentPage
             ItemsView.ItemsSourceProperty,
             nameof(viewModel.ActiveProjects));
 
+        var manageProjects = new Button
+        {
+            Text = "Create or manage Projects",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        manageProjects.Clicked += async (_, _) =>
+            await Shell.Current.GoToAsync("//para");
+
         return Section(
             "Current Projects",
             EmptyState(
                 nameof(viewModel.AreProjectsEmpty),
-                "Activate a Project to make it visible here."),
+                "No Projects yet. Create one to give current work a home."),
+            manageProjects,
             collection);
     }
 

@@ -62,7 +62,7 @@ public sealed class DashboardUseCase(ICoreKnowledgeRepository repository)
             state.Projects
                 .Where(project =>
                     !project.IsArchived &&
-                    project.Status == ProjectStatus.Active)
+                    project.Status is ProjectStatus.Planned or ProjectStatus.Active)
                 .OrderBy(project => project.Name.Value)
                 .Select(project => new DashboardProject(
                     project.Id,

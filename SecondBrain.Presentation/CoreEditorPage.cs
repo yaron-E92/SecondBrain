@@ -106,6 +106,14 @@ public sealed class CoreEditorPage : ContentPage
 
     private View CreateSelector()
     {
+        var createContext = new Button
+        {
+            Text = "Create or manage placements",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        createContext.Clicked += async (_, _) =>
+            await Shell.Current.GoToAsync("//para");
+
         var button = new Button
         {
             Text = "New item",
@@ -119,7 +127,12 @@ public sealed class CoreEditorPage : ContentPage
             }
         };
 
-        return Section("Create", _kindPicker, _placementPicker, button);
+        return Section(
+            "Create",
+            _kindPicker,
+            _placementPicker,
+            createContext,
+            button);
     }
 
     private View EditSelector()
