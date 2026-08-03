@@ -100,6 +100,7 @@ public sealed class MainPage : ContentPage
     {
         var collection = new CollectionView
         {
+            SelectionMode = SelectionMode.Single,
             ItemTemplate = new DataTemplate(() =>
             {
                 var name = new Label
@@ -126,6 +127,23 @@ public sealed class MainPage : ContentPage
         collection.SetBinding(
             ItemsView.ItemsSourceProperty,
             nameof(viewModel.ActiveProjects));
+        collection.SelectionChanged += async (_, args) =>
+        {
+            if (args.CurrentSelection.FirstOrDefault() is not DashboardProject project)
+            {
+                return;
+            }
+
+            collection.SelectedItem = null;
+            await Shell.Current.GoToAsync(
+                "//para",
+                new Dictionary<string, object>
+                {
+                    ["contextKind"] = ParaContextKind.Project.ToString(),
+                    ["contextId"] = project.Id.Value.ToString(),
+                    ["returnRoute"] = "home",
+                });
+        };
 
         var manageProjects = new Button
         {
