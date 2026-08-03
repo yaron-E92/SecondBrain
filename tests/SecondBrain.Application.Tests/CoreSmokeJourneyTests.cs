@@ -135,6 +135,8 @@ public sealed class CoreSmokeJourneyTests
         Assert.That(
             await browser.MoveSelectedAsync(projectDestination),
             Is.True);
+        await inbox.LoadCommand.ExecuteAsync(null);
+        Assert.That(inbox.IsEmpty, Is.True);
 
         browser.OpenWorkspace(project);
         browser.SelectedItem = browser.WorkspaceIdeas.Single();
@@ -158,7 +160,7 @@ public sealed class CoreSmokeJourneyTests
         Assert.Multiple(() =>
         {
             Assert.That(dashboard.CaptureStatus, Is.EqualTo("Captured to Inbox."));
-            Assert.That(inbox.Items.Single().Id, Is.EqualTo(captured.Id));
+            Assert.That(repository.State.BrainItems.Single().Id, Is.EqualTo(captured.Id));
             Assert.That(editor.Kind, Is.EqualTo(BrainItemKind.Idea));
             Assert.That(editor.HasError, Is.False);
             Assert.That(repository.State.BrainItems.Single().IsArchived, Is.False);
