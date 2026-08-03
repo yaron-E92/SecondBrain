@@ -405,6 +405,157 @@ public sealed class ParaBrowserViewModelTests
     }
 
     [Test]
+    public async Task Workspace_GroupsActiveItemsAndProvidesContextualCreateDefaults()
+    {
+        var project = new Project(
+            ProjectId.New(),
+            new ParaContextName("Launch"),
+            "Ship the workspace");
+        var placement = PrimaryPlacement.InProject(project.Id);
+        var archived = CreateNote("Archived", placement);
+        archived.Archive();
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Projects = [project],
+                BrainItems =
+                [
+                    CreateCapture("Capture", placement),
+                    CreateNote("Note", placement),
+                    CreateIdea("Idea", placement),
+                    CreateResource("Resource", placement),
+                    CreateJournalEntry("Journal", placement),
+                    archived,
+                ],
+                Journals = [new Journal(SecondBrainItemId.New(), "Daily")],
+            });
+        var viewModel = CreateViewModel(repository);
+
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.OpenWorkspace(
+            ParaContextKind.Project,
+            project.Id.Value,
+            "home");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsWorkspaceAvailable, Is.True);
+            Assert.That(viewModel.Workspace!.Name, Is.EqualTo("Launch"));
+            Assert.That(viewModel.Workspace.Details, Does.Contain("Ship the workspace"));
+            Assert.That(
+                viewModel.WorkspaceCaptures.Select(item => item.Title),
+                Is.EqualTo(new[] { "Capture" }));
+            Assert.That(
+                viewModel.WorkspaceNotes.Select(item => item.Title),
+                Is.EqualTo(new[] { "Note" }));
+            Assert.That(
+                viewModel.WorkspaceIdeas.Select(item => item.Title),
+                Is.EqualTo(new[] { "Idea" }));
+            Assert.That(
+                viewModel.WorkspaceResources.Select(item => item.Title),
+                Is.EqualTo(new[] { "Resource" }));
+            Assert.That(
+                viewModel.WorkspaceJournalEntries.Select(item => item.Title),
+                Is.EqualTo(new[] { "Journal" }));
+            Assert.That(
+                viewModel.Workspace.CreateTargets.Select(target => target.Kind),
+                Is.EquivalentTo(new[]
+                {
+                    BrainItemKind.Note,
+                    BrainItemKind.KnowledgeCapture,
+                    BrainItemKind.ResourceArtifact,
+                    BrainItemKind.JournalEntry,
+                }));
+            Assert.That(
+                viewModel.Workspace.CreateTargets.All(target =>
+                    target.Placement == placement),
+                Is.True);
+            Assert.That(viewModel.WorkspaceReturnRoute, Is.EqualTo("home"));
+        });
+    }
+
+    [Test]
+    public async Task Workspace_RelatedContextNavigationRestoresThePreviousWorkspace()
+    {
+        var project = new Project(
+            ProjectId.New(),
+            new ParaContextName("Launch"),
+            "Ship");
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var projectItem = CreateNote(
+            "Plan",
+            PrimaryPlacement.InProject(project.Id));
+        var areaItem = CreateNote(
+            "Draft",
+            PrimaryPlacement.InArea(area.Id));
+        projectItem.AddContextualLink(areaItem.Id);
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Projects = [project],
+                Areas = [area],
+                BrainItems = [projectItem, areaItem],
+            });
+        var viewModel = CreateViewModel(repository);
+
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.OpenWorkspace(ParaContextKind.Project, project.Id.Value);
+        var target = viewModel.WorkspaceRelatedContexts.Single();
+        viewModel.OpenRelatedWorkspace(target);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(target.Kind, Is.EqualTo(ParaContextKind.Area));
+            Assert.That(target.Id, Is.EqualTo(area.Id.Value));
+            Assert.That(target.Name, Is.EqualTo("Writing"));
+            Assert.That(viewModel.Workspace!.Name, Is.EqualTo("Writing"));
+            Assert.That(viewModel.TryReturnToPreviousWorkspace(), Is.True);
+            Assert.That(viewModel.Workspace!.Name, Is.EqualTo("Launch"));
+        });
+    }
+
+    [Test]
+    public async Task Workspace_EmptyArchivedAndMissingContextsRemainActionable()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Archived area"));
+        area.Archive();
+        var topic = new ResourceTopic(
+            ResourceTopicId.New(),
+            new ParaContextName("Empty topic"));
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Areas = [area],
+                ResourceTopics = [topic],
+            });
+        var viewModel = CreateViewModel(repository);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        viewModel.OpenWorkspace(ParaContextKind.ResourceTopic, topic.Id.Value);
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsWorkspaceEmpty, Is.True);
+            Assert.That(viewModel.Workspace!.CreateTargets, Has.Count.EqualTo(3));
+        });
+
+        viewModel.OpenWorkspace(ParaContextKind.Area, area.Id.Value);
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsWorkspaceUnavailable, Is.True);
+            Assert.That(viewModel.Workspace!.IsArchived, Is.True);
+            Assert.That(viewModel.Workspace.UnavailableMessage, Does.Contain("restore"));
+        });
+
+        viewModel.OpenWorkspace(ParaContextKind.Project, Guid.NewGuid());
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsWorkspaceUnavailable, Is.True);
+            Assert.That(viewModel.Workspace!.Name, Is.EqualTo("Workspace unavailable"));
+            Assert.That(viewModel.Workspace.UnavailableMessage, Does.Contain("no longer exists"));
+        });
+    }
+
+    [Test]
     public async Task CanceledLoad_DoesNotTreatLoadingAsRefreshOrSurfaceAnError()
     {
         var repository = new CancellationAwareRepository();
@@ -478,6 +629,42 @@ public sealed class ParaBrowserViewModelTests
             placement,
             CreatedAt,
             ideaMaturity: IdeaMaturity.Captured);
+
+    private static BrainItem CreateCapture(string title, PrimaryPlacement placement) =>
+        new(
+            SecondBrainItemId.New(),
+            BrainItemKind.KnowledgeCapture,
+            title,
+            $"{title} content",
+            placement,
+            CreatedAt,
+            captureSourceType: CaptureSourceType.Article,
+            sourceUri: new Uri("https://example.com/source"),
+            sourceCitation: "Example source",
+            captureProcessingState: CaptureProcessingState.Captured);
+
+    private static BrainItem CreateResource(string title, PrimaryPlacement placement) =>
+        new(
+            SecondBrainItemId.New(),
+            BrainItemKind.ResourceArtifact,
+            title,
+            $"{title} content",
+            placement,
+            CreatedAt,
+            resourceArtifactKind: ResourceArtifactKind.Guide,
+            resourceFreshness: ResourceFreshness.Current);
+
+    private static BrainItem CreateJournalEntry(
+        string title,
+        PrimaryPlacement placement) =>
+        new(
+            SecondBrainItemId.New(),
+            BrainItemKind.JournalEntry,
+            title,
+            $"{title} content",
+            placement,
+            CreatedAt,
+            entryDate: new DateOnly(2026, 8, 2));
 
     private static CoreKnowledgeState EmptyState() =>
         new([], [], [], [], [], []);

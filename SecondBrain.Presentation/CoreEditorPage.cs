@@ -5,7 +5,7 @@ using SecondBrain.Presentation.ViewModels;
 
 namespace SecondBrain.Presentation;
 
-public sealed class CoreEditorPage : ContentPage
+public sealed class CoreEditorPage : ContentPage, IQueryAttributable
 {
     private readonly CoreEditorViewModel _viewModel;
     private readonly ICoreKnowledgeRepository _repository;
@@ -17,7 +17,13 @@ public sealed class CoreEditorPage : ContentPage
     private readonly Entry _reviewDateEntry;
     private readonly Entry _occurrenceDateEntry;
     private readonly Label _catalogMessage;
+    private readonly Button _backToWorkspaceButton;
     private CoreKnowledgeState? _state;
+    private BrainItemKind? _pendingCreateKind;
+    private SecondBrainItemId? _pendingItemId;
+    private PrimaryPlacement? _pendingPlacement;
+    private (ParaContextKind Kind, Guid Id)? _returnWorkspace;
+    private string _workspaceReturnRoute = "para";
 
     public CoreEditorPage(
         CoreEditorViewModel viewModel,
@@ -66,6 +72,15 @@ public sealed class CoreEditorPage : ContentPage
             FontSize = 13
         };
 
+        _backToWorkspaceButton = new Button
+        {
+            Text = "← Back to workspace",
+            HorizontalOptions = LayoutOptions.Start,
+            IsVisible = false
+        };
+        _backToWorkspaceButton.Clicked += async (_, _) =>
+            await NavigateToWorkspaceAsync();
+
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
@@ -75,6 +90,7 @@ public sealed class CoreEditorPage : ContentPage
                 Children =
                 {
                     Header(),
+                    _backToWorkspaceButton,
                     _catalogMessage,
                     CreateSelector(),
                     EditSelector(),
@@ -96,11 +112,63 @@ public sealed class CoreEditorPage : ContentPage
         base.OnAppearing();
         await RefreshChoicesAsync();
 
+        if (await ApplyPendingNavigationAsync())
+        {
+            return;
+        }
+
         if (_viewModel.ItemId is null &&
             !_viewModel.IsDirty &&
             _placementPicker.SelectedItem is not null)
         {
             BeginCreate();
+        }
+    }
+
+    public void ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        _pendingCreateKind = null;
+        _pendingItemId = null;
+        _pendingPlacement = null;
+        _returnWorkspace = null;
+        _workspaceReturnRoute = "para";
+        _backToWorkspaceButton.IsVisible = false;
+
+        var contextKind = default(ParaContextKind);
+        var contextId = Guid.Empty;
+        var hasContext =
+            TryGetQueryValue(query, "contextKind", out var contextKindValue) &&
+            Enum.TryParse<ParaContextKind>(
+                contextKindValue,
+                true,
+                out contextKind) &&
+            TryGetQueryValue(query, "contextId", out var contextIdValue) &&
+            Guid.TryParse(contextIdValue, out contextId) &&
+            contextId != Guid.Empty;
+        if (hasContext)
+        {
+            _pendingPlacement = PlacementFor(contextKind, contextId);
+            if (_pendingPlacement is not null)
+            {
+                _returnWorkspace = (contextKind, contextId);
+                TryGetQueryValue(query, "returnRoute", out var returnRoute);
+                _workspaceReturnRoute = NormalizeReturnRoute(returnRoute);
+                _backToWorkspaceButton.IsVisible = true;
+            }
+        }
+
+        if (TryGetQueryValue(query, "mode", out var mode) &&
+            string.Equals(mode, "create", StringComparison.OrdinalIgnoreCase) &&
+            TryGetQueryValue(query, "itemKind", out var itemKindValue) &&
+            Enum.TryParse<BrainItemKind>(itemKindValue, true, out var itemKind))
+        {
+            _pendingCreateKind = itemKind;
+        }
+        else if (TryGetQueryValue(query, "itemId", out var itemIdValue) &&
+            Guid.TryParse(itemIdValue, out var itemId) &&
+            itemId != Guid.Empty)
+        {
+            _pendingItemId = new SecondBrainItemId(itemId);
         }
     }
 
@@ -112,7 +180,22 @@ public sealed class CoreEditorPage : ContentPage
             HorizontalOptions = LayoutOptions.Start
         };
         createContext.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync("//para");
+            await Shell.Current.GoToAsync(
+                "//para",
+                new Dictionary<string, object> { ["mode"] = "browse" });
+
+        var openPlacement = new Button
+        {
+            Text = "Open selected workspace",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        openPlacement.Clicked += async (_, _) =>
+        {
+            if (TryGetPlacement(_placementPicker.SelectedItem) is { } placement)
+            {
+                await OpenPlacementWorkspaceAsync(placement);
+            }
+        };
 
         var button = new Button
         {
@@ -131,6 +214,7 @@ public sealed class CoreEditorPage : ContentPage
             "Create",
             _kindPicker,
             _placementPicker,
+            openPlacement,
             createContext,
             button);
     }
@@ -155,6 +239,7 @@ public sealed class CoreEditorPage : ContentPage
                     journal.Entries.Any(entry => entry.Id == item.Id))?
                 .Id;
             await _viewModel.LoadAsync(item.Id, journalId);
+            SelectPlacement(item.PrimaryPlacement);
             SyncDateFields();
             SelectJournal(journalId);
         };
@@ -312,7 +397,14 @@ public sealed class CoreEditorPage : ContentPage
     private View Actions()
     {
         var cancel = new Button { Text = "Cancel" };
-        cancel.SetBinding(Button.CommandProperty, nameof(_viewModel.CancelCommand));
+        cancel.Clicked += async (_, _) =>
+        {
+            _viewModel.CancelCommand.Execute(null);
+            if (_returnWorkspace is not null)
+            {
+                await NavigateToWorkspaceAsync();
+            }
+        };
 
         var save = new Button { Text = "Save" };
         save.Clicked += async (_, _) =>
@@ -321,7 +413,14 @@ public sealed class CoreEditorPage : ContentPage
             if (!_viewModel.HasError)
             {
                 await RefreshChoicesAsync();
-                await DisplayAlertAsync("Saved", "Your changes were saved.", "OK");
+                if (_returnWorkspace is not null)
+                {
+                    await NavigateToWorkspaceAsync();
+                }
+                else
+                {
+                    await DisplayAlertAsync("Saved", "Your changes were saved.", "OK");
+                }
             }
         };
 
@@ -354,6 +453,143 @@ public sealed class CoreEditorPage : ContentPage
         }
 
         SyncDateFields();
+    }
+
+    private async Task<bool> ApplyPendingNavigationAsync()
+    {
+        if (_pendingItemId is { } itemId)
+        {
+            _pendingItemId = null;
+            var item = _state?.BrainItems.SingleOrDefault(candidate =>
+                candidate.Id == itemId);
+            if (item is null)
+            {
+                _catalogMessage.Text =
+                    "The requested item is no longer available. Return to the workspace and refresh.";
+                return true;
+            }
+
+            var journalId = _state?.Journals
+                .FirstOrDefault(journal =>
+                    journal.Entries.Any(entry => entry.Id == item.Id))?
+                .Id;
+            await _viewModel.LoadAsync(item.Id, journalId);
+            SelectPlacement(item.PrimaryPlacement);
+            SelectJournal(journalId);
+            SyncDateFields();
+            return true;
+        }
+
+        if (_pendingCreateKind is not { } kind ||
+            _pendingPlacement is not { } placement)
+        {
+            return false;
+        }
+
+        _pendingCreateKind = null;
+        _pendingPlacement = null;
+        _kindPicker.SelectedItem = kind;
+        if (!SelectPlacement(placement))
+        {
+            _catalogMessage.Text =
+                "The requested workspace is archived or no longer available. Return to PARA and choose another placement.";
+            return true;
+        }
+
+        _catalogMessage.Text = string.Empty;
+        _viewModel.BeginCreate(kind, placement);
+        if (kind == BrainItemKind.JournalEntry)
+        {
+            _journalPicker.SelectedIndex =
+                _journalPicker.ItemsSource?.Count > 0 ? 0 : -1;
+            _viewModel.JournalEntry.JournalId =
+                (_journalPicker.SelectedItem as Journal)?.Id;
+            _viewModel.JournalEntry.OccurrenceDate =
+                DateOnly.FromDateTime(DateTime.Today);
+        }
+
+        SyncDateFields();
+        return true;
+    }
+
+    private bool SelectPlacement(PrimaryPlacement placement)
+    {
+        var placements = _placementPicker.ItemsSource?.Cast<object>().ToArray() ?? [];
+        var selected = placements.FirstOrDefault(candidate =>
+            TryGetPlacement(candidate) == placement);
+        _placementPicker.SelectedItem = selected;
+        return selected is not null;
+    }
+
+    private async Task OpenPlacementWorkspaceAsync(PrimaryPlacement placement)
+    {
+        var kind = placement.Kind switch
+        {
+            PrimaryPlacementKind.Project => ParaContextKind.Project,
+            PrimaryPlacementKind.Area => ParaContextKind.Area,
+            PrimaryPlacementKind.ResourceTopic => ParaContextKind.ResourceTopic,
+            _ => throw new ArgumentOutOfRangeException(nameof(placement)),
+        };
+        await Shell.Current.GoToAsync(
+            "//para",
+            new Dictionary<string, object>
+            {
+                ["contextKind"] = kind.ToString(),
+                ["contextId"] = placement.ContextId.ToString(),
+                ["returnRoute"] = "editor",
+            });
+    }
+
+    private async Task NavigateToWorkspaceAsync()
+    {
+        if (_returnWorkspace is not { } workspace)
+        {
+            return;
+        }
+
+        await Shell.Current.GoToAsync(
+            "//para",
+            new Dictionary<string, object>
+            {
+                ["contextKind"] = workspace.Kind.ToString(),
+                ["contextId"] = workspace.Id.ToString(),
+                ["returnRoute"] = _workspaceReturnRoute,
+            });
+    }
+
+    private static PrimaryPlacement? PlacementFor(
+        ParaContextKind kind,
+        Guid id) =>
+        kind switch
+        {
+            ParaContextKind.Project => PrimaryPlacement.InProject(new ProjectId(id)),
+            ParaContextKind.Area => PrimaryPlacement.InArea(new AreaId(id)),
+            ParaContextKind.ResourceTopic => PrimaryPlacement.InResourceTopic(
+                new ResourceTopicId(id)),
+            _ => null,
+        };
+
+    private static string NormalizeReturnRoute(string? returnRoute) =>
+        returnRoute?.Trim().ToLowerInvariant() switch
+        {
+            "home" => "home",
+            "editor" => "editor",
+            _ => "para",
+        };
+
+    private static bool TryGetQueryValue(
+        IDictionary<string, object> query,
+        string key,
+        out string? value)
+    {
+        if (query.TryGetValue(key, out var rawValue) && rawValue is not null)
+        {
+            value = Uri.UnescapeDataString(rawValue.ToString() ?? string.Empty);
+            return true;
+        }
+
+        value = null;
+        return false;
     }
 
     private async Task RefreshChoicesAsync()

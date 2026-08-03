@@ -51,12 +51,40 @@ public sealed record ParaItemSummary(
     bool IsFavorite,
     bool IsArchived);
 
+public sealed record ParaWorkspaceContextTarget(
+    ParaContextKind Kind,
+    Guid Id,
+    string Name);
+
+public sealed record ParaWorkspaceCreateTarget(
+    BrainItemKind Kind,
+    string Name,
+    PrimaryPlacement Placement);
+
+public sealed record ParaWorkspace(
+    ParaContextKind Kind,
+    Guid Id,
+    string Name,
+    string Details,
+    bool IsArchived,
+    IReadOnlyList<ParaItemSummary> Items,
+    IReadOnlyList<ParaWorkspaceContextTarget> RelatedContexts,
+    IReadOnlyList<ParaWorkspaceCreateTarget> CreateTargets,
+    string? UnavailableMessage)
+{
+    public bool IsAvailable => string.IsNullOrWhiteSpace(UnavailableMessage);
+
+    public bool IsEmpty => IsAvailable && Items.Count == 0;
+}
+
 public sealed partial class ParaBrowserViewModel : ObservableObject
 {
     private readonly ICoreKnowledgeRepository _repository;
     private readonly CoreKnowledgeUseCases _useCases;
     private readonly Func<DateTimeOffset> _now;
     private CoreKnowledgeState? _state;
+    private (ParaContextKind Kind, Guid Id)? _workspaceKey;
+    private readonly Stack<(ParaContextKind Kind, Guid Id)> _workspaceHistory = [];
 
     public ParaBrowserViewModel(
         ICoreKnowledgeRepository repository,
@@ -196,9 +224,77 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
     [ObservableProperty]
     public partial string StatusMessage { get; set; } = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBrowserVisible))]
+    public partial bool IsWorkspaceOpen { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWorkspaceAvailable))]
+    [NotifyPropertyChangedFor(nameof(IsWorkspaceUnavailable))]
+    [NotifyPropertyChangedFor(nameof(IsWorkspaceEmpty))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceCaptures))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceNotes))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceIdeas))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceResources))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceJournalEntries))]
+    [NotifyPropertyChangedFor(nameof(AreWorkspaceCapturesEmpty))]
+    [NotifyPropertyChangedFor(nameof(AreWorkspaceNotesEmpty))]
+    [NotifyPropertyChangedFor(nameof(AreWorkspaceIdeasEmpty))]
+    [NotifyPropertyChangedFor(nameof(AreWorkspaceResourcesEmpty))]
+    [NotifyPropertyChangedFor(nameof(AreWorkspaceJournalEntriesEmpty))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceRelatedContexts))]
+    [NotifyPropertyChangedFor(nameof(HasWorkspaceRelatedContexts))]
+    [NotifyPropertyChangedFor(nameof(CanCreateWorkspaceJournalEntry))]
+    public partial ParaWorkspace? Workspace { get; set; }
+
+    [ObservableProperty]
+    public partial string WorkspaceReturnRoute { get; set; } = "para";
+
     public bool IsEmpty => Items.Count == 0;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    public bool IsBrowserVisible => !IsWorkspaceOpen;
+
+    public bool IsWorkspaceAvailable => Workspace is { IsAvailable: true };
+
+    public bool IsWorkspaceUnavailable => Workspace is { IsAvailable: false };
+
+    public bool IsWorkspaceEmpty => Workspace is { IsEmpty: true };
+
+    public IReadOnlyList<ParaItemSummary> WorkspaceCaptures =>
+        WorkspaceItems(BrainItemKind.KnowledgeCapture);
+
+    public IReadOnlyList<ParaItemSummary> WorkspaceNotes =>
+        WorkspaceItems(BrainItemKind.Note);
+
+    public IReadOnlyList<ParaItemSummary> WorkspaceIdeas =>
+        WorkspaceItems(BrainItemKind.Idea);
+
+    public IReadOnlyList<ParaItemSummary> WorkspaceResources =>
+        WorkspaceItems(BrainItemKind.ResourceArtifact);
+
+    public IReadOnlyList<ParaItemSummary> WorkspaceJournalEntries =>
+        WorkspaceItems(BrainItemKind.JournalEntry);
+
+    public bool AreWorkspaceCapturesEmpty => WorkspaceCaptures.Count == 0;
+
+    public bool AreWorkspaceNotesEmpty => WorkspaceNotes.Count == 0;
+
+    public bool AreWorkspaceIdeasEmpty => WorkspaceIdeas.Count == 0;
+
+    public bool AreWorkspaceResourcesEmpty => WorkspaceResources.Count == 0;
+
+    public bool AreWorkspaceJournalEntriesEmpty => WorkspaceJournalEntries.Count == 0;
+
+    public IReadOnlyList<ParaWorkspaceContextTarget> WorkspaceRelatedContexts =>
+        Workspace?.RelatedContexts ?? [];
+
+    public bool HasWorkspaceRelatedContexts => WorkspaceRelatedContexts.Count > 0;
+
+    public bool CanCreateWorkspaceJournalEntry =>
+        Workspace?.CreateTargets.Any(target =>
+            target.Kind == BrainItemKind.JournalEntry) == true;
 
     public bool HasSelectedItem => SelectedItem is not null;
 
@@ -259,6 +355,71 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
             ProjectStatus: global::SecondBrain.Domain.Entities.ProjectStatus.Planned or
                 global::SecondBrain.Domain.Entities.ProjectStatus.Active,
         };
+
+    public void OpenWorkspace(
+        ContextCatalogItem? context,
+        string returnRoute = "para")
+    {
+        if (context is null)
+        {
+            return;
+        }
+
+        OpenWorkspace(context.Kind, context.Id, returnRoute);
+    }
+
+    public void OpenWorkspace(
+        ParaContextKind kind,
+        Guid id,
+        string returnRoute = "para")
+    {
+        if (!IsWorkspaceKind(kind) || id == Guid.Empty)
+        {
+            throw new ArgumentException("A Project, Area, or Resource Topic is required.");
+        }
+
+        _workspaceHistory.Clear();
+        WorkspaceReturnRoute = NormalizeReturnRoute(returnRoute);
+        ShowWorkspace(kind, id);
+    }
+
+    public void OpenRelatedWorkspace(ParaWorkspaceContextTarget? target)
+    {
+        if (target is null)
+        {
+            return;
+        }
+
+        if (_workspaceKey is { } current)
+        {
+            _workspaceHistory.Push(current);
+        }
+
+        ShowWorkspace(target.Kind, target.Id);
+    }
+
+    public bool TryReturnToPreviousWorkspace()
+    {
+        if (_workspaceHistory.Count == 0)
+        {
+            return false;
+        }
+
+        var previous = _workspaceHistory.Pop();
+        ShowWorkspace(previous.Kind, previous.Id);
+        return true;
+    }
+
+    public void CloseWorkspace()
+    {
+        _workspaceKey = null;
+        _workspaceHistory.Clear();
+        Workspace = null;
+        IsWorkspaceOpen = false;
+    }
+
+    public ParaWorkspaceCreateTarget? GetWorkspaceCreateTarget(BrainItemKind kind) =>
+        Workspace?.CreateTargets.FirstOrDefault(target => target.Kind == kind);
 
     [RelayCommand]
     private async Task LoadAsync(CancellationToken cancellationToken) =>
@@ -823,6 +984,41 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         }
     }
 
+    private void ShowWorkspace(ParaContextKind kind, Guid id)
+    {
+        _workspaceKey = (kind, id);
+        IsWorkspaceOpen = true;
+
+        if (_state is null)
+        {
+            Workspace = null;
+            return;
+        }
+
+        Workspace = BuildWorkspace(_state, _workspaceKey.Value);
+        SelectedContext = Contexts.FirstOrDefault(context =>
+            context.Kind == kind && context.Id == id);
+        SelectedCatalogContext = ContextCatalog.FirstOrDefault(context =>
+            context.Kind == kind && context.Id == id);
+        SelectedItem = Workspace.Items.FirstOrDefault();
+    }
+
+    private IReadOnlyList<ParaItemSummary> WorkspaceItems(BrainItemKind kind) =>
+        Workspace?.Items.Where(item => item.Kind == kind).ToArray() ?? [];
+
+    private static bool IsWorkspaceKind(ParaContextKind kind) =>
+        kind is ParaContextKind.Project or
+            ParaContextKind.Area or
+            ParaContextKind.ResourceTopic;
+
+    private static string NormalizeReturnRoute(string? returnRoute) =>
+        returnRoute?.Trim().ToLowerInvariant() switch
+        {
+            "home" => "home",
+            "editor" => "editor",
+            _ => "para",
+        };
+
     private async Task RefreshAsync(
         SecondBrainItemId? preferredItemId,
         CancellationToken cancellationToken,
@@ -830,13 +1026,18 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
     {
         IsLoading = true;
         ErrorMessage = null;
-        (ParaContextKind Kind, Guid? Id)? contextKey = SelectedContext is null
-            ? null
-            : (SelectedContext.Kind, SelectedContext.Id);
-        var catalogKey = preferredCatalogContext ??
-            (SelectedCatalogContext is null
+        var selectedItemId = preferredItemId ?? SelectedItem?.Id;
+        (ParaContextKind Kind, Guid? Id)? contextKey = _workspaceKey is { } workspaceKey
+            ? (workspaceKey.Kind, workspaceKey.Id)
+            : SelectedContext is null
                 ? null
-                : (SelectedCatalogContext.Kind, SelectedCatalogContext.Id));
+                : (SelectedContext.Kind, SelectedContext.Id);
+        var catalogKey = preferredCatalogContext ??
+            (_workspaceKey is { } selectedWorkspaceKey
+                ? selectedWorkspaceKey
+                : SelectedCatalogContext is null
+                    ? null
+                    : (SelectedCatalogContext.Kind, SelectedCatalogContext.Id));
 
         try
         {
@@ -865,6 +1066,19 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
                     context.Kind == catalogKey.Value.Kind &&
                     context.Id == catalogKey.Value.Id);
             ApplyFilters(preferredItemId);
+            if (_workspaceKey is { } activeWorkspaceKey)
+            {
+                Workspace = BuildWorkspace(_state, activeWorkspaceKey);
+                SelectedItem = selectedItemId is null
+                    ? Workspace.Items.FirstOrDefault()
+                    : Workspace.Items.FirstOrDefault(item =>
+                        item.Id == selectedItemId.Value) ??
+                        Workspace.Items.FirstOrDefault();
+            }
+            else
+            {
+                Workspace = null;
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -975,6 +1189,173 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         IsContextEditorVisible = true;
         IsCreatingContext = false;
     }
+
+    private static ParaWorkspace BuildWorkspace(
+        CoreKnowledgeState state,
+        (ParaContextKind Kind, Guid Id) key)
+    {
+        (string Name, string Details, bool IsArchived)? identity = key.Kind switch
+        {
+            ParaContextKind.Project => state.Projects
+                .Where(project => project.Id.Value == key.Id)
+                .Select(project => ((string Name, string Details, bool IsArchived)?)(
+                    project.Name.Value,
+                    $"{project.Status} · {project.Priority} · {project.Outcome}" +
+                    (project.TargetDate is null
+                        ? string.Empty
+                        : $" · Target {project.TargetDate:yyyy-MM-dd}"),
+                    project.IsArchived))
+                .SingleOrDefault(),
+            ParaContextKind.Area => state.Areas
+                .Where(area => area.Id.Value == key.Id)
+                .Select(area => ((string Name, string Details, bool IsArchived)?)(
+                    area.Name.Value,
+                    "Area · Ongoing responsibility",
+                    area.IsArchived))
+                .SingleOrDefault(),
+            ParaContextKind.ResourceTopic => state.ResourceTopics
+                .Where(topic => topic.Id.Value == key.Id)
+                .Select(topic => ((string Name, string Details, bool IsArchived)?)(
+                    topic.Name.Value,
+                    "Resource Topic · Reference workspace",
+                    topic.IsArchived))
+                .SingleOrDefault(),
+            _ => null,
+        };
+
+        if (identity is null)
+        {
+            return new ParaWorkspace(
+                key.Kind,
+                key.Id,
+                "Workspace unavailable",
+                ContextTypeName(key.Kind),
+                false,
+                [],
+                [],
+                [],
+                $"This {ContextTypeName(key.Kind)} no longer exists. Return to PARA and choose another workspace.");
+        }
+
+        var (name, details, isArchived) = identity.Value;
+        if (isArchived)
+        {
+            return new ParaWorkspace(
+                key.Kind,
+                key.Id,
+                name,
+                details,
+                true,
+                [],
+                [],
+                [],
+                $"This {ContextTypeName(key.Kind)} is archived. Return to PARA to restore or reorganize it.");
+        }
+
+        var placement = PlacementFor(key);
+        var items = state.BrainItems
+            .Where(item => !item.IsArchived && item.PrimaryPlacement == placement)
+            .OrderBy(item => item.Kind)
+            .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Id.Value)
+            .Select(item => ToSummary(state, item))
+            .ToArray();
+        var relatedContexts = BuildRelatedContexts(state, items, key);
+        var createTargets = new List<ParaWorkspaceCreateTarget>
+        {
+            new(BrainItemKind.Note, "New Note", placement),
+            new(BrainItemKind.KnowledgeCapture, "New Capture", placement),
+            new(BrainItemKind.ResourceArtifact, "New Resource", placement),
+        };
+        if (state.Journals.Count > 0)
+        {
+            createTargets.Add(new ParaWorkspaceCreateTarget(
+                BrainItemKind.JournalEntry,
+                "New Journal Entry",
+                placement));
+        }
+
+        return new ParaWorkspace(
+            key.Kind,
+            key.Id,
+            name,
+            details,
+            false,
+            items,
+            relatedContexts,
+            createTargets,
+            null);
+    }
+
+    private static IReadOnlyList<ParaWorkspaceContextTarget> BuildRelatedContexts(
+        CoreKnowledgeState state,
+        IReadOnlyList<ParaItemSummary> workspaceItems,
+        (ParaContextKind Kind, Guid Id) workspaceKey)
+    {
+        var workspaceItemIds = workspaceItems.Select(item => item.Id).ToHashSet();
+        var linkedIds = state.BrainItems
+            .Where(item => workspaceItemIds.Contains(item.Id))
+            .SelectMany(item => item.ContextualLinks)
+            .Concat(state.BrainItems
+                .Where(item => item.ContextualLinks.Any(workspaceItemIds.Contains))
+                .Select(item => item.Id))
+            .ToHashSet();
+
+        return state.BrainItems
+            .Where(item => !item.IsArchived && linkedIds.Contains(item.Id))
+            .Select(item => ToWorkspaceContextTarget(state, item.PrimaryPlacement))
+            .Where(target => target is not null)
+            .Select(target => target!)
+            .Where(target =>
+                target.Kind != workspaceKey.Kind || target.Id != workspaceKey.Id)
+            .DistinctBy(target => (target.Kind, target.Id))
+            .OrderBy(target => target.Kind)
+            .ThenBy(target => target.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static ParaWorkspaceContextTarget? ToWorkspaceContextTarget(
+        CoreKnowledgeState state,
+        PrimaryPlacement placement) =>
+        placement.Kind switch
+        {
+            PrimaryPlacementKind.Project => state.Projects
+                .Where(project =>
+                    project.Id.Value == placement.ContextId && !project.IsArchived)
+                .Select(project => new ParaWorkspaceContextTarget(
+                    ParaContextKind.Project,
+                    project.Id.Value,
+                    project.Name.Value))
+                .SingleOrDefault(),
+            PrimaryPlacementKind.Area => state.Areas
+                .Where(area =>
+                    area.Id.Value == placement.ContextId && !area.IsArchived)
+                .Select(area => new ParaWorkspaceContextTarget(
+                    ParaContextKind.Area,
+                    area.Id.Value,
+                    area.Name.Value))
+                .SingleOrDefault(),
+            PrimaryPlacementKind.ResourceTopic => state.ResourceTopics
+                .Where(topic =>
+                    topic.Id.Value == placement.ContextId && !topic.IsArchived)
+                .Select(topic => new ParaWorkspaceContextTarget(
+                    ParaContextKind.ResourceTopic,
+                    topic.Id.Value,
+                    topic.Name.Value))
+                .SingleOrDefault(),
+            _ => null,
+        };
+
+    private static PrimaryPlacement PlacementFor(
+        (ParaContextKind Kind, Guid Id) key) =>
+        key.Kind switch
+        {
+            ParaContextKind.Project => PrimaryPlacement.InProject(new ProjectId(key.Id)),
+            ParaContextKind.Area => PrimaryPlacement.InArea(new AreaId(key.Id)),
+            ParaContextKind.ResourceTopic => PrimaryPlacement.InResourceTopic(
+                new ResourceTopicId(key.Id)),
+            _ => throw new ArgumentOutOfRangeException(nameof(key)),
+        };
 
     private static IReadOnlyList<ContextCatalogItem> BuildContextCatalog(
         CoreKnowledgeState state) =>

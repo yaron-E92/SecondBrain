@@ -5,7 +5,7 @@ using SecondBrain.Presentation.ViewModels;
 
 namespace SecondBrain.Presentation;
 
-public sealed class ParaBrowserPage : ContentPage
+public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
 {
     private readonly ParaBrowserViewModel _viewModel;
 
@@ -15,6 +15,21 @@ public sealed class ParaBrowserPage : ContentPage
         BindingContext = viewModel;
         Title = "PARA";
         BackgroundColor = Colors.White;
+
+        var browser = new VerticalStackLayout
+        {
+            Spacing = 16,
+            Children =
+            {
+                Catalog(),
+                Contexts(),
+                Filters(),
+                Items(),
+                Details(),
+                Organize()
+            }
+        };
+        browser.SetBinding(IsVisibleProperty, nameof(viewModel.IsBrowserVisible));
 
         Content = new RefreshView
         {
@@ -28,12 +43,8 @@ public sealed class ParaBrowserPage : ContentPage
                     {
                         Header(),
                         Feedback(),
-                        Catalog(),
-                        Contexts(),
-                        Filters(),
-                        Items(),
-                        Details(),
-                        Organize()
+                        Workspace(),
+                        browser
                     }
                 }
             }
@@ -50,6 +61,27 @@ public sealed class ParaBrowserPage : ContentPage
     {
         base.OnAppearing();
         await _viewModel.LoadCommand.ExecuteAsync(null);
+    }
+
+    public void ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        if (TryGetQueryValue(query, "mode", out var mode) &&
+            string.Equals(mode, "browse", StringComparison.OrdinalIgnoreCase))
+        {
+            _viewModel.CloseWorkspace();
+            return;
+        }
+
+        if (!TryGetQueryValue(query, "contextKind", out var kindValue) ||
+            !Enum.TryParse<ParaContextKind>(kindValue, true, out var kind) ||
+            !TryGetQueryValue(query, "contextId", out var idValue) ||
+            !Guid.TryParse(idValue, out var id))
+        {
+            return;
+        }
+
+        TryGetQueryValue(query, "returnRoute", out var returnRoute);
+        _viewModel.OpenWorkspace(kind, id, returnRoute ?? "para");
     }
 
     private View Header() =>
@@ -71,6 +103,281 @@ public sealed class ParaBrowserPage : ContentPage
                 }
             }
         };
+
+    private View Workspace()
+    {
+        var back = new Button
+        {
+            Text = "← Back",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        back.Clicked += async (_, _) =>
+        {
+            if (_viewModel.TryReturnToPreviousWorkspace())
+            {
+                return;
+            }
+
+            var returnRoute = _viewModel.WorkspaceReturnRoute;
+            _viewModel.CloseWorkspace();
+            if (returnRoute != "para")
+            {
+                await Shell.Current.GoToAsync($"//{returnRoute}");
+            }
+        };
+
+        var breadcrumb = new Label
+        {
+            FontSize = 13,
+            TextColor = Colors.DarkSlateBlue
+        };
+        breadcrumb.SetBinding(
+            Label.TextProperty,
+            $"{nameof(_viewModel.Workspace)}.{nameof(ParaWorkspace.Name)}",
+            stringFormat: "PARA / {0}");
+
+        var name = new Label
+        {
+            FontSize = 26,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.Black
+        };
+        name.SetBinding(
+            Label.TextProperty,
+            $"{nameof(_viewModel.Workspace)}.{nameof(ParaWorkspace.Name)}");
+
+        var details = new Label { TextColor = Colors.DarkSlateGray };
+        details.SetBinding(
+            Label.TextProperty,
+            $"{nameof(_viewModel.Workspace)}.{nameof(ParaWorkspace.Details)}");
+
+        var archived = new Label
+        {
+            Text = "Archived",
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.DarkOrange
+        };
+        archived.SetBinding(
+            IsVisibleProperty,
+            $"{nameof(_viewModel.Workspace)}.{nameof(ParaWorkspace.IsArchived)}");
+
+        var unavailableMessage = new Label { TextColor = Colors.DarkRed };
+        unavailableMessage.SetBinding(
+            Label.TextProperty,
+            $"{nameof(_viewModel.Workspace)}.{nameof(ParaWorkspace.UnavailableMessage)}");
+        var retry = new Button
+        {
+            Text = "Retry",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        retry.SetBinding(Button.CommandProperty, nameof(_viewModel.LoadCommand));
+        var manageUnavailable = new Button
+        {
+            Text = "Return to PARA management",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        manageUnavailable.Clicked += (_, _) =>
+        {
+            var selected = _viewModel.SelectedCatalogContext;
+            _viewModel.CloseWorkspace();
+            if (selected is not null)
+            {
+                _viewModel.BeginEditContext(selected);
+            }
+        };
+        var unavailable = new VerticalStackLayout
+        {
+            Spacing = 8,
+            Children = { unavailableMessage, retry, manageUnavailable }
+        };
+        unavailable.SetBinding(
+            IsVisibleProperty,
+            nameof(_viewModel.IsWorkspaceUnavailable));
+
+        var createNote = WorkspaceCreateButton("New Note", BrainItemKind.Note);
+        var createCapture = WorkspaceCreateButton(
+            "New Capture",
+            BrainItemKind.KnowledgeCapture);
+        var createResource = WorkspaceCreateButton(
+            "New Resource",
+            BrainItemKind.ResourceArtifact);
+        var createJournal = WorkspaceCreateButton(
+            "New Journal Entry",
+            BrainItemKind.JournalEntry);
+        createJournal.SetBinding(
+            IsVisibleProperty,
+            nameof(_viewModel.CanCreateWorkspaceJournalEntry));
+
+        var empty = new Label
+        {
+            Text = "Nothing belongs here yet. Create knowledge here or move an existing item into this workspace.",
+            TextColor = Colors.DarkSlateGray
+        };
+        empty.SetBinding(IsVisibleProperty, nameof(_viewModel.IsWorkspaceEmpty));
+
+        var openItem = new Button
+        {
+            Text = "Open selected item",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        openItem.SetBinding(IsVisibleProperty, nameof(_viewModel.HasSelectedItem));
+        openItem.Clicked += async (_, _) => await OpenSelectedWorkspaceItemAsync();
+
+        var related = new CollectionView
+        {
+            HeightRequest = 120,
+            SelectionMode = SelectionMode.Single,
+            ItemTemplate = new DataTemplate(() =>
+            {
+                var label = new Label
+                {
+                    Padding = new Thickness(8, 6),
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = Colors.DarkSlateBlue
+                };
+                label.SetBinding(
+                    Label.TextProperty,
+                    nameof(ParaWorkspaceContextTarget.Name));
+                return label;
+            })
+        };
+        related.SetBinding(
+            ItemsView.ItemsSourceProperty,
+            nameof(_viewModel.WorkspaceRelatedContexts));
+        related.SelectionChanged += (_, args) =>
+        {
+            _viewModel.OpenRelatedWorkspace(
+                args.CurrentSelection.FirstOrDefault() as ParaWorkspaceContextTarget);
+            related.SelectedItem = null;
+        };
+        var relatedSection = Section("Related workspaces", related);
+        relatedSection.SetBinding(
+            IsVisibleProperty,
+            nameof(_viewModel.HasWorkspaceRelatedContexts));
+
+        var manage = new Button
+        {
+            Text = "Edit or organize this workspace",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        manage.Clicked += (_, _) =>
+        {
+            var selected = _viewModel.SelectedCatalogContext;
+            _viewModel.CloseWorkspace();
+            if (selected is not null)
+            {
+                _viewModel.BeginEditContext(selected);
+            }
+        };
+
+        var available = new VerticalStackLayout
+        {
+            Spacing = 12,
+            Children =
+            {
+                Section(
+                    "What can I do next?",
+                    new HorizontalStackLayout
+                    {
+                        Spacing = 8,
+                        Children =
+                        {
+                            createNote,
+                            createCapture,
+                            createResource,
+                            createJournal
+                        }
+                    },
+                    manage),
+                empty,
+                WorkspaceItemSection(
+                    "Captures",
+                    nameof(_viewModel.WorkspaceCaptures),
+                    nameof(_viewModel.AreWorkspaceCapturesEmpty)),
+                WorkspaceItemSection(
+                    "Notes",
+                    nameof(_viewModel.WorkspaceNotes),
+                    nameof(_viewModel.AreWorkspaceNotesEmpty)),
+                WorkspaceItemSection(
+                    "Ideas",
+                    nameof(_viewModel.WorkspaceIdeas),
+                    nameof(_viewModel.AreWorkspaceIdeasEmpty)),
+                WorkspaceItemSection(
+                    "Resources",
+                    nameof(_viewModel.WorkspaceResources),
+                    nameof(_viewModel.AreWorkspaceResourcesEmpty)),
+                WorkspaceItemSection(
+                    "Journal Entries",
+                    nameof(_viewModel.WorkspaceJournalEntries),
+                    nameof(_viewModel.AreWorkspaceJournalEntriesEmpty)),
+                openItem,
+                Details(),
+                relatedSection,
+                Organize()
+            }
+        };
+        available.SetBinding(
+            IsVisibleProperty,
+            nameof(_viewModel.IsWorkspaceAvailable));
+
+        var content = Section(
+            "Workspace",
+            back,
+            breadcrumb,
+            name,
+            details,
+            archived,
+            unavailable,
+            available);
+        content.SetBinding(IsVisibleProperty, nameof(_viewModel.IsWorkspaceOpen));
+        return content;
+    }
+
+    private View WorkspaceItemSection(
+        string title,
+        string itemsProperty,
+        string emptyProperty)
+    {
+        var empty = new Label
+        {
+            Text = $"No {title.ToLowerInvariant()} yet.",
+            FontSize = 13,
+            TextColor = Colors.DarkSlateGray
+        };
+        empty.SetBinding(IsVisibleProperty, emptyProperty);
+
+        var items = new CollectionView
+        {
+            HeightRequest = 130,
+            SelectionMode = SelectionMode.Single,
+            ItemTemplate = new DataTemplate(() =>
+            {
+                var titleLabel = new Label
+                {
+                    Padding = new Thickness(8, 6),
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = Colors.Black
+                };
+                titleLabel.SetBinding(
+                    Label.TextProperty,
+                    nameof(ParaItemSummary.Title));
+                return titleLabel;
+            })
+        };
+        items.SetBinding(ItemsView.ItemsSourceProperty, itemsProperty);
+        items.SetBinding(
+            SelectableItemsView.SelectedItemProperty,
+            nameof(_viewModel.SelectedItem),
+            mode: BindingMode.TwoWay);
+        return Section(title, empty, items);
+    }
+
+    private Button WorkspaceCreateButton(string text, BrainItemKind kind)
+    {
+        var button = new Button { Text = text };
+        button.Clicked += async (_, _) => await OpenWorkspaceCreateAsync(kind);
+        return button;
+    }
 
     private View Feedback()
     {
@@ -185,8 +492,11 @@ public sealed class ParaBrowserPage : ContentPage
         };
         items.SetBinding(ItemsView.ItemsSourceProperty, itemsProperty);
         items.SelectionChanged += (_, args) =>
-            _viewModel.BeginEditContext(
+        {
+            _viewModel.OpenWorkspace(
                 args.CurrentSelection.FirstOrDefault() as ContextCatalogItem);
+            items.SelectedItem = null;
+        };
 
         var create = new Button
         {
@@ -430,7 +740,26 @@ public sealed class ParaBrowserPage : ContentPage
             nameof(_viewModel.SelectedContext),
             mode: BindingMode.TwoWay);
 
-        return Section("Contexts", selectedName, selectedDetails, contexts);
+        var open = new Button
+        {
+            Text = "Open selected workspace",
+            HorizontalOptions = LayoutOptions.Start
+        };
+        open.Clicked += (_, _) =>
+        {
+            if (_viewModel.SelectedContext is
+                {
+                    Kind: ParaContextKind.Project or
+                        ParaContextKind.Area or
+                        ParaContextKind.ResourceTopic,
+                    Id: { } id,
+                } selected)
+            {
+                _viewModel.OpenWorkspace(selected.Kind, id);
+            }
+        };
+
+        return Section("Contexts", selectedName, selectedDetails, contexts, open);
     }
 
     private View Filters()
@@ -586,7 +915,14 @@ public sealed class ParaBrowserPage : ContentPage
             HorizontalOptions = LayoutOptions.Start
         };
         createDestination.Clicked += (_, _) =>
+        {
+            if (_viewModel.IsWorkspaceOpen)
+            {
+                _viewModel.CloseWorkspace();
+            }
+
             _viewModel.BeginCreateContext(ParaContextKind.Area);
+        };
 
         var move = new Button { Text = "Move" };
         move.Clicked += async (_, _) =>
@@ -683,6 +1019,63 @@ public sealed class ParaBrowserPage : ContentPage
             addLink);
         actions.SetBinding(IsVisibleProperty, nameof(_viewModel.HasSelectedItem));
         return actions;
+    }
+
+    private async Task OpenWorkspaceCreateAsync(BrainItemKind kind)
+    {
+        var target = _viewModel.GetWorkspaceCreateTarget(kind);
+        var workspace = _viewModel.Workspace;
+        if (target is null || workspace is null)
+        {
+            return;
+        }
+
+        await Shell.Current.GoToAsync(
+            "//editor",
+            new Dictionary<string, object>
+            {
+                ["mode"] = "create",
+                ["itemKind"] = target.Kind.ToString(),
+                ["contextKind"] = workspace.Kind.ToString(),
+                ["contextId"] = workspace.Id.ToString(),
+                ["returnRoute"] = _viewModel.WorkspaceReturnRoute,
+            });
+    }
+
+    private async Task OpenSelectedWorkspaceItemAsync()
+    {
+        var item = _viewModel.SelectedItem;
+        var workspace = _viewModel.Workspace;
+        if (item is null || workspace is null)
+        {
+            return;
+        }
+
+        await Shell.Current.GoToAsync(
+            "//editor",
+            new Dictionary<string, object>
+            {
+                ["mode"] = "edit",
+                ["itemId"] = item.Id.Value.ToString(),
+                ["contextKind"] = workspace.Kind.ToString(),
+                ["contextId"] = workspace.Id.ToString(),
+                ["returnRoute"] = _viewModel.WorkspaceReturnRoute,
+            });
+    }
+
+    private static bool TryGetQueryValue(
+        IDictionary<string, object> query,
+        string key,
+        out string? value)
+    {
+        if (query.TryGetValue(key, out var rawValue) && rawValue is not null)
+        {
+            value = Uri.UnescapeDataString(rawValue.ToString() ?? string.Empty);
+            return true;
+        }
+
+        value = null;
+        return false;
     }
 
     private Label BoundLabel(
