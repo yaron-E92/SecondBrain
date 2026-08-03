@@ -217,6 +217,194 @@ public sealed class ParaBrowserViewModelTests
     }
 
     [Test]
+    public async Task FreshDatabase_CreatesEveryContextAndRefreshesBrowseAndDestinations()
+    {
+        var repository = new FakeRepository(EmptyState());
+        var viewModel = CreateViewModel(repository);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.AreCatalogProjectsEmpty, Is.True);
+            Assert.That(viewModel.AreCatalogAreasEmpty, Is.True);
+            Assert.That(viewModel.AreCatalogResourceTopicsEmpty, Is.True);
+        });
+
+        viewModel.BeginCreateContext(ParaContextKind.Project);
+        viewModel.ContextName = "Launch";
+        viewModel.ProjectOutcome = "Ship the milestone";
+        viewModel.ProjectPriority = ProjectPriority.High;
+        viewModel.ProjectTargetDate = "2026-09-01";
+        var projectSaved = await viewModel.SaveContextAsync();
+
+        viewModel.BeginCreateContext(ParaContextKind.Area);
+        viewModel.ContextName = "Writing";
+        var areaSaved = await viewModel.SaveContextAsync();
+
+        viewModel.BeginCreateContext(ParaContextKind.ResourceTopic);
+        viewModel.ContextName = "Architecture";
+        var topicSaved = await viewModel.SaveContextAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projectSaved, Is.True);
+            Assert.That(areaSaved, Is.True);
+            Assert.That(topicSaved, Is.True);
+            Assert.That(repository.State.Projects.Single().Name.Value, Is.EqualTo("Launch"));
+            Assert.That(repository.State.Areas.Single().Name.Value, Is.EqualTo("Writing"));
+            Assert.That(
+                repository.State.ResourceTopics.Single().Name.Value,
+                Is.EqualTo("Architecture"));
+            Assert.That(
+                viewModel.ContextCatalog.Select(context => context.Name),
+                Is.EquivalentTo(new[] { "Launch", "Writing", "Architecture" }));
+            Assert.That(
+                viewModel.Contexts.Select(context => context.Name),
+                Does.Contain("Launch").And.Contain("Writing").And.Contain("Architecture"));
+            Assert.That(viewModel.Destinations, Has.Count.EqualTo(3));
+            Assert.That(repository.SaveCount, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public async Task EditAndLifecycle_PreserveContextIdentityAndItemPlacement()
+    {
+        var project = new Project(
+            ProjectId.New(),
+            new ParaContextName("Initial"),
+            "Initial outcome");
+        var item = CreateNote("Placed item", PrimaryPlacement.InProject(project.Id));
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Projects = [project],
+                BrainItems = [item],
+            });
+        var viewModel = CreateViewModel(repository);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.BeginEditContext(viewModel.ContextCatalog.Single());
+        viewModel.ContextName = "Renamed";
+        viewModel.ProjectOutcome = "Updated outcome";
+        viewModel.ProjectPriority = ProjectPriority.High;
+        viewModel.ProjectTargetDate = "2026-10-15";
+
+        var saved = await viewModel.SaveContextAsync();
+        var activated = await viewModel.TransitionSelectedProjectAsync(
+            ProjectLifecycleTransition.Activate);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(saved, Is.True);
+            Assert.That(activated, Is.True);
+            Assert.That(project.Id, Is.EqualTo(item.PrimaryPlacement.GetProjectId()));
+            Assert.That(project.Name.Value, Is.EqualTo("Renamed"));
+            Assert.That(project.Outcome, Is.EqualTo("Updated outcome"));
+            Assert.That(project.Priority, Is.EqualTo(ProjectPriority.High));
+            Assert.That(project.TargetDate, Is.EqualTo(new DateOnly(2026, 10, 15)));
+            Assert.That(project.Status, Is.EqualTo(ProjectStatus.Active));
+            Assert.That(viewModel.SelectedCatalogContext!.Name, Is.EqualTo("Renamed"));
+            Assert.That(
+                viewModel.Destinations.Single().Placement,
+                Is.EqualTo(PrimaryPlacement.InProject(project.Id)));
+        });
+    }
+
+    [Test]
+    public async Task InvalidDuplicateCancelAndPersistenceFailure_RetainEditableInput()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var repository = new FakeRepository(
+            EmptyState() with { Areas = [area] });
+        var viewModel = CreateViewModel(repository);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        viewModel.BeginCreateContext(ParaContextKind.Area);
+        viewModel.ContextName = " ";
+        var invalid = await viewModel.SaveContextAsync();
+        viewModel.ContextName = "writing";
+        var duplicate = await viewModel.SaveContextAsync();
+        viewModel.CancelContextEdit();
+        viewModel.BeginEditContext(viewModel.ContextCatalog.Single());
+        viewModel.ContextName = "Unsaved rename";
+        viewModel.CancelContextEdit();
+
+        var failingRepository = new FakeRepository(
+            EmptyState(),
+            new InvalidOperationException("Disk unavailable"));
+        var failingViewModel = CreateViewModel(failingRepository);
+        await failingViewModel.LoadCommand.ExecuteAsync(null);
+        failingViewModel.BeginCreateContext(ParaContextKind.ResourceTopic);
+        failingViewModel.ContextName = "Keep this topic";
+        var failedSave = await failingViewModel.SaveContextAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(invalid, Is.False);
+            Assert.That(duplicate, Is.False);
+            Assert.That(repository.SaveCount, Is.Zero);
+            Assert.That(repository.State.Areas, Has.Count.EqualTo(1));
+            Assert.That(area.Name.Value, Is.EqualTo("Writing"));
+            Assert.That(viewModel.IsContextEditorVisible, Is.False);
+            Assert.That(failedSave, Is.False);
+            Assert.That(failingViewModel.ContextName, Is.EqualTo("Keep this topic"));
+            Assert.That(failingViewModel.ContextEditorError, Does.Contain("Disk unavailable"));
+            Assert.That(failingRepository.State.ResourceTopics, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task ContextArchiveRestoreAndStaleSelection_AreSafeAndRefreshLists()
+    {
+        var project = new Project(
+            ProjectId.New(),
+            new ParaContextName("Project"),
+            "Outcome");
+        var area = new Area(AreaId.New(), new ParaContextName("Area"));
+        var topic = new ResourceTopic(
+            ResourceTopicId.New(),
+            new ParaContextName("Topic"));
+        var placed = CreateNote("Placed", PrimaryPlacement.InProject(project.Id));
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Projects = [project],
+                Areas = [area],
+                ResourceTopics = [topic],
+                BrainItems = [placed],
+            });
+        var viewModel = CreateViewModel(repository);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        foreach (var context in viewModel.ContextCatalog.ToArray())
+        {
+            viewModel.BeginEditContext(context);
+            Assert.That(await viewModel.ArchiveSelectedContextAsync(), Is.True);
+            Assert.That(viewModel.SelectedCatalogContext!.IsArchived, Is.True);
+            Assert.That(
+                viewModel.Destinations.Any(destination =>
+                    destination.Placement.ContextId == context.Id),
+                Is.False);
+            Assert.That(await viewModel.RestoreSelectedContextAsync(), Is.True);
+            Assert.That(viewModel.SelectedCatalogContext!.IsArchived, Is.False);
+        }
+
+        viewModel.BeginEditContext(viewModel.ContextCatalog.Single(
+            context => context.Kind == ParaContextKind.Area));
+        repository.ReplaceState(
+            repository.State with { Areas = [] });
+        var staleArchive = await viewModel.ArchiveSelectedContextAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(staleArchive, Is.False);
+            Assert.That(viewModel.ContextEditorError, Does.Contain("not found"));
+            Assert.That(repository.SaveCount, Is.EqualTo(6));
+            Assert.That(placed.PrimaryPlacement, Is.EqualTo(
+                PrimaryPlacement.InProject(project.Id)));
+        });
+    }
+
+    [Test]
     public async Task CanceledLoad_DoesNotTreatLoadingAsRefreshOrSurfaceAnError()
     {
         var repository = new CancellationAwareRepository();
@@ -294,7 +482,9 @@ public sealed class ParaBrowserViewModelTests
     private static CoreKnowledgeState EmptyState() =>
         new([], [], [], [], [], []);
 
-    private sealed class FakeRepository(CoreKnowledgeState state)
+    private sealed class FakeRepository(
+        CoreKnowledgeState state,
+        Exception? saveException = null)
         : ICoreKnowledgeRepository
     {
         public CoreKnowledgeState State { get; private set; } = state;
@@ -309,10 +499,18 @@ public sealed class ParaBrowserViewModelTests
             CoreKnowledgeState newState,
             CancellationToken cancellationToken = default)
         {
+            if (saveException is not null)
+            {
+                return Task.FromException(saveException);
+            }
+
             State = newState;
             SaveCount++;
             return Task.CompletedTask;
         }
+
+        public void ReplaceState(CoreKnowledgeState newState) =>
+            State = newState;
     }
 
     private sealed class CancellationAwareRepository : ICoreKnowledgeRepository

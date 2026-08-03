@@ -204,6 +204,57 @@ public sealed class CoreKnowledgeUseCasesTests
     }
 
     [Test]
+    public async Task DuplicateContextNames_ReturnConflictsWithoutSavingOrMutating()
+    {
+        var firstProject = new Project(
+            ProjectId.New(),
+            new ParaContextName("Launch"),
+            "First outcome");
+        var firstArea = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var secondArea = new Area(AreaId.New(), new ParaContextName("Planning"));
+        var firstTopic = new ResourceTopic(
+            ResourceTopicId.New(),
+            new ParaContextName("Architecture"));
+        var repository = new FakeCoreKnowledgeRepository(
+            EmptyState() with
+            {
+                Projects = [firstProject],
+                Areas = [firstArea, secondArea],
+                ResourceTopics = [firstTopic],
+            });
+        var useCases = new CoreKnowledgeUseCases(repository);
+
+        var project = await useCases.CreateProjectAsync(
+            new CreateProjectCommand(new Project(
+                ProjectId.New(),
+                new ParaContextName("launch"),
+                "Duplicate")));
+        var area = await useCases.CreateAreaAsync(
+            new CreateAreaCommand(new Area(
+                AreaId.New(),
+                new ParaContextName("WRITING"))));
+        var topic = await useCases.CreateResourceTopicAsync(
+            new CreateResourceTopicCommand(new ResourceTopic(
+                ResourceTopicId.New(),
+                new ParaContextName("architecture"))));
+        var update = await useCases.UpdateAreaAsync(
+            new UpdateAreaCommand(
+                secondArea.Id,
+                new ParaContextName("writing")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(project.Error!.Code, Is.EqualTo(CoreOperationErrorCode.Conflict));
+            Assert.That(area.Error!.Code, Is.EqualTo(CoreOperationErrorCode.Conflict));
+            Assert.That(topic.Error!.Code, Is.EqualTo(CoreOperationErrorCode.Conflict));
+            Assert.That(update.Error!.Code, Is.EqualTo(CoreOperationErrorCode.Conflict));
+            Assert.That(project.Error.Message, Does.Contain("named 'launch'"));
+            Assert.That(secondArea.Name.Value, Is.EqualTo("Planning"));
+            Assert.That(repository.SaveCount, Is.Zero);
+        });
+    }
+
+    [Test]
     public async Task MissingReferencesAndInvalidTransitions_ReturnTypedFailuresWithoutSaving()
     {
         var note = CreateNote(AreaId.New());

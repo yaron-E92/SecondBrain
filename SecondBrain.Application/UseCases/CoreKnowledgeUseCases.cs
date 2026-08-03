@@ -125,11 +125,12 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
         ArgumentNullException.ThrowIfNull(command);
 
         return MutateAsync(
-            state => AddUnique(
+            state => AddUniqueNamed(
                 state,
                 command.Project,
                 state.Projects,
                 project => project.Id == command.Project.Id,
+                project => project.Name.Value,
                 "Project",
                 command.Project.Id.Value,
                 projects => state with { Projects = projects }),
@@ -143,11 +144,12 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
         ArgumentNullException.ThrowIfNull(command);
 
         return MutateAsync(
-            state => AddUnique(
+            state => AddUniqueNamed(
                 state,
                 command.Area,
                 state.Areas,
                 area => area.Id == command.Area.Id,
+                area => area.Name.Value,
                 "Area",
                 command.Area.Id.Value,
                 areas => state with { Areas = areas }),
@@ -161,11 +163,12 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
         ArgumentNullException.ThrowIfNull(command);
 
         return MutateAsync(
-            state => AddUnique(
+            state => AddUniqueNamed(
                 state,
                 command.ResourceTopic,
                 state.ResourceTopics,
                 resourceTopic => resourceTopic.Id == command.ResourceTopic.Id,
+                resourceTopic => resourceTopic.Name.Value,
                 "Resource topic",
                 command.ResourceTopic.Id.Value,
                 resourceTopics => state with { ResourceTopics = resourceTopics }),
@@ -302,18 +305,23 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        return MutateExistingAsync(
-            state => state.Projects.SingleOrDefault(project => project.Id == command.Id),
-            "Project",
-            command.Id.Value,
-            project =>
-            {
-                project.Rename(command.Name);
-                project.UpdateMetadata(
-                    command.Outcome,
-                    command.Priority,
-                    command.TargetDate);
-            },
+        return MutateAsync(
+            state => UpdateNamedContext(
+                state,
+                state.Projects,
+                project => project.Id.Value,
+                project => project.Name.Value,
+                command.Id.Value,
+                command.Name.Value,
+                "Project",
+                project =>
+                {
+                    project.UpdateMetadata(
+                        command.Outcome,
+                        command.Priority,
+                        command.TargetDate);
+                    project.Rename(command.Name);
+                }),
             cancellationToken);
     }
 
@@ -323,11 +331,16 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        return MutateExistingAsync(
-            state => state.Areas.SingleOrDefault(area => area.Id == command.Id),
-            "Area",
-            command.Id.Value,
-            area => area.Rename(command.Name),
+        return MutateAsync(
+            state => UpdateNamedContext(
+                state,
+                state.Areas,
+                area => area.Id.Value,
+                area => area.Name.Value,
+                command.Id.Value,
+                command.Name.Value,
+                "Area",
+                area => area.Rename(command.Name)),
             cancellationToken);
     }
 
@@ -337,12 +350,16 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        return MutateExistingAsync(
-            state => state.ResourceTopics.SingleOrDefault(
-                resourceTopic => resourceTopic.Id == command.Id),
-            "Resource topic",
-            command.Id.Value,
-            resourceTopic => resourceTopic.Rename(command.Name),
+        return MutateAsync(
+            state => UpdateNamedContext(
+                state,
+                state.ResourceTopics,
+                resourceTopic => resourceTopic.Id.Value,
+                resourceTopic => resourceTopic.Name.Value,
+                command.Id.Value,
+                command.Name.Value,
+                "Resource topic",
+                resourceTopic => resourceTopic.Rename(command.Name)),
             cancellationToken);
     }
 
@@ -678,6 +695,84 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
         return Mutation<T>.Succeeded(
             updateState(values.Append(value).ToArray()),
             value);
+    }
+
+    private static Mutation<T> AddUniqueNamed<T>(
+        CoreKnowledgeState state,
+        T value,
+        IReadOnlyList<T> values,
+        Func<T, bool> idExists,
+        Func<T, string> getName,
+        string entityName,
+        Guid id,
+        Func<IReadOnlyList<T>, CoreKnowledgeState> updateState)
+        where T : class
+    {
+        var uniqueId = AddUnique(
+            state,
+            value,
+            values,
+            idExists,
+            entityName,
+            id,
+            updateState);
+        if (!uniqueId.Result.IsSuccess || value is null)
+        {
+            return uniqueId;
+        }
+
+        var name = getName(value);
+        if (values.Any(existing => string.Equals(
+            getName(existing),
+            name,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return Mutation<T>.Failed(
+                CoreOperationErrorCode.Conflict,
+                $"{entityName} named '{name}' already exists.");
+        }
+
+        return uniqueId;
+    }
+
+    private static Mutation<T> UpdateNamedContext<T>(
+        CoreKnowledgeState state,
+        IReadOnlyList<T> values,
+        Func<T, Guid> getId,
+        Func<T, string> getName,
+        Guid id,
+        string name,
+        string entityName,
+        Action<T> update)
+        where T : class
+    {
+        if (id == Guid.Empty)
+        {
+            return Mutation<T>.Failed(
+                CoreOperationErrorCode.Validation,
+                $"{entityName} ID cannot be empty.");
+        }
+
+        var value = values.SingleOrDefault(existing => getId(existing) == id);
+        if (value is null)
+        {
+            return Mutation<T>.NotFound(entityName, id);
+        }
+
+        if (values.Any(existing =>
+            getId(existing) != id &&
+            string.Equals(
+                getName(existing),
+                name,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return Mutation<T>.Failed(
+                CoreOperationErrorCode.Conflict,
+                $"{entityName} named '{name}' already exists.");
+        }
+
+        update(value);
+        return Mutation<T>.Succeeded(state, value);
     }
 
     private static CoreOperationError? ValidateBrainItemReferences(

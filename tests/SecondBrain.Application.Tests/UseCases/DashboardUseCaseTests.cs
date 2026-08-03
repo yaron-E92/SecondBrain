@@ -63,7 +63,7 @@ public sealed class DashboardUseCaseTests
                 Is.EqualTo(new[] { "Captured" }));
             Assert.That(
                 snapshot.ActiveProjects.Select(project => project.Name),
-                Is.EqualTo(new[] { "Launch" }));
+                Is.EqualTo(new[] { "Later", "Launch" }));
             Assert.That(
                 snapshot.Favorites.Select(item => item.Title),
                 Is.EqualTo(new[] { "Favorite" }));

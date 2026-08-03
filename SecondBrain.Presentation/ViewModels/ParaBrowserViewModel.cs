@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Globalization;
 using SecondBrain.Application.Ports;
 using SecondBrain.Application.UseCases;
 using SecondBrain.Domain.Entities;
@@ -21,6 +22,14 @@ public sealed record ParaContextItem(
     Guid? Id,
     string Name,
     string Details);
+
+public sealed record ContextCatalogItem(
+    ParaContextKind Kind,
+    Guid Id,
+    string Name,
+    string Details,
+    bool IsArchived,
+    ProjectStatus? ProjectStatus = null);
 
 public sealed record ParaDestination(
     PrimaryPlacement Placement,
@@ -80,6 +89,15 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
     public partial IReadOnlyList<ParaContextItem> Contexts { get; set; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CatalogProjects))]
+    [NotifyPropertyChangedFor(nameof(CatalogAreas))]
+    [NotifyPropertyChangedFor(nameof(CatalogResourceTopics))]
+    [NotifyPropertyChangedFor(nameof(AreCatalogProjectsEmpty))]
+    [NotifyPropertyChangedFor(nameof(AreCatalogAreasEmpty))]
+    [NotifyPropertyChangedFor(nameof(AreCatalogResourceTopicsEmpty))]
+    public partial IReadOnlyList<ContextCatalogItem> ContextCatalog { get; set; } = [];
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     public partial IReadOnlyList<ParaItemSummary> Items { get; set; } = [];
 
@@ -98,6 +116,15 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ParaContextItem? SelectedContext { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedCatalogContext))]
+    [NotifyPropertyChangedFor(nameof(CanArchiveSelectedContext))]
+    [NotifyPropertyChangedFor(nameof(CanRestoreSelectedContext))]
+    [NotifyPropertyChangedFor(nameof(CanActivateSelectedProject))]
+    [NotifyPropertyChangedFor(nameof(CanCompleteSelectedProject))]
+    [NotifyPropertyChangedFor(nameof(CanCancelSelectedProject))]
+    public partial ContextCatalogItem? SelectedCatalogContext { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedItem))]
@@ -124,6 +151,37 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
     public partial bool FavoritesOnly { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsProjectContextEditor))]
+    public partial ParaContextKind ContextEditorKind { get; set; } =
+        ParaContextKind.Project;
+
+    [ObservableProperty]
+    public partial bool IsContextEditorVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCreatingContext { get; set; }
+
+    [ObservableProperty]
+    public partial string ContextName { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ProjectOutcome { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial ProjectPriority ProjectPriority { get; set; } =
+        ProjectPriority.Normal;
+
+    [ObservableProperty]
+    public partial string ProjectTargetDate { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContextEditorError))]
+    public partial string? ContextEditorError { get; set; }
+
+    [ObservableProperty]
+    public partial string ContextEditorStatus { get; set; } = string.Empty;
+
+    [ObservableProperty]
     public partial bool IsLoading { get; set; }
 
     // RefreshView executes its command when this becomes true, so it must not
@@ -148,9 +206,326 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
 
     public bool CanRestoreSelected => SelectedItem is { IsArchived: true };
 
+    public IReadOnlyList<ContextCatalogItem> CatalogProjects =>
+        ContextCatalog.Where(context => context.Kind == ParaContextKind.Project).ToArray();
+
+    public IReadOnlyList<ContextCatalogItem> CatalogAreas =>
+        ContextCatalog.Where(context => context.Kind == ParaContextKind.Area).ToArray();
+
+    public IReadOnlyList<ContextCatalogItem> CatalogResourceTopics =>
+        ContextCatalog
+            .Where(context => context.Kind == ParaContextKind.ResourceTopic)
+            .ToArray();
+
+    public bool AreCatalogProjectsEmpty => CatalogProjects.Count == 0;
+
+    public bool AreCatalogAreasEmpty => CatalogAreas.Count == 0;
+
+    public bool AreCatalogResourceTopicsEmpty => CatalogResourceTopics.Count == 0;
+
+    public bool HasSelectedCatalogContext => SelectedCatalogContext is not null;
+
+    public bool IsProjectContextEditor => ContextEditorKind == ParaContextKind.Project;
+
+    public bool HasContextEditorError => !string.IsNullOrWhiteSpace(ContextEditorError);
+
+    public bool CanArchiveSelectedContext =>
+        SelectedCatalogContext is { IsArchived: false };
+
+    public bool CanRestoreSelectedContext =>
+        SelectedCatalogContext is { IsArchived: true };
+
+    public bool CanActivateSelectedProject =>
+        SelectedCatalogContext is
+        {
+            Kind: ParaContextKind.Project,
+            IsArchived: false,
+            ProjectStatus: global::SecondBrain.Domain.Entities.ProjectStatus.Planned,
+        };
+
+    public bool CanCompleteSelectedProject =>
+        SelectedCatalogContext is
+        {
+            Kind: ParaContextKind.Project,
+            IsArchived: false,
+            ProjectStatus: global::SecondBrain.Domain.Entities.ProjectStatus.Active,
+        };
+
+    public bool CanCancelSelectedProject =>
+        SelectedCatalogContext is
+        {
+            Kind: ParaContextKind.Project,
+            IsArchived: false,
+            ProjectStatus: global::SecondBrain.Domain.Entities.ProjectStatus.Planned or
+                global::SecondBrain.Domain.Entities.ProjectStatus.Active,
+        };
+
     [RelayCommand]
     private async Task LoadAsync(CancellationToken cancellationToken) =>
         await RefreshAsync(null, cancellationToken);
+
+    public void BeginCreateContext(ParaContextKind kind)
+    {
+        if (kind is not (
+            ParaContextKind.Project or
+            ParaContextKind.Area or
+            ParaContextKind.ResourceTopic))
+        {
+            FailContext("Choose Project, Area, or Resource Topic.");
+            return;
+        }
+
+        SelectedCatalogContext = null;
+        ContextEditorKind = kind;
+        ContextName = string.Empty;
+        ProjectOutcome = string.Empty;
+        ProjectPriority = ProjectPriority.Normal;
+        ProjectTargetDate = string.Empty;
+        ContextEditorError = null;
+        ContextEditorStatus = string.Empty;
+        IsCreatingContext = true;
+        IsContextEditorVisible = true;
+    }
+
+    public void BeginEditContext(ContextCatalogItem? context)
+    {
+        if (context is null || _state is null)
+        {
+            FailContext("Choose a context to inspect or edit.");
+            return;
+        }
+
+        SelectedCatalogContext = context;
+        PopulateContextForm(context);
+        ContextEditorError = null;
+        ContextEditorStatus = string.Empty;
+        IsCreatingContext = false;
+        IsContextEditorVisible = true;
+    }
+
+    public void CancelContextEdit()
+    {
+        IsContextEditorVisible = false;
+        ContextEditorError = null;
+        ContextEditorStatus = string.Empty;
+    }
+
+    public async Task<bool> SaveContextAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsContextEditorVisible)
+        {
+            return FailContext("Open a context form first.");
+        }
+
+        var name = ContextName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return FailContext("Name is required.");
+        }
+
+        DateOnly? targetDate = null;
+        if (ContextEditorKind == ParaContextKind.Project)
+        {
+            if (string.IsNullOrWhiteSpace(ProjectOutcome))
+            {
+                return FailContext("Project outcome is required.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(ProjectTargetDate))
+            {
+                if (!DateOnly.TryParseExact(
+                    ProjectTargetDate.Trim(),
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var parsedTargetDate))
+                {
+                    return FailContext("Target date must use yyyy-MM-dd.");
+                }
+
+                targetDate = parsedTargetDate;
+            }
+        }
+
+        return await RunContextOperationAsync(
+            async () =>
+            {
+                CoreOperationError? error;
+                Guid savedId;
+                var contextName = new ParaContextName(name);
+
+                switch (ContextEditorKind)
+                {
+                    case ParaContextKind.Project:
+                    {
+                        CoreOperationResult<Project> result;
+                        if (IsCreatingContext)
+                        {
+                            var project = new Project(
+                                ProjectId.New(),
+                                contextName,
+                                ProjectOutcome,
+                                ProjectPriority,
+                                targetDate);
+                            result = await _useCases.CreateProjectAsync(
+                                new CreateProjectCommand(project),
+                                cancellationToken);
+                        }
+                        else if (SelectedCatalogContext is
+                            { Kind: ParaContextKind.Project } selected)
+                        {
+                            result = await _useCases.UpdateProjectAsync(
+                                new UpdateProjectCommand(
+                                    new ProjectId(selected.Id),
+                                    contextName,
+                                    ProjectOutcome,
+                                    ProjectPriority,
+                                    targetDate),
+                                cancellationToken);
+                        }
+                        else
+                        {
+                            return FailContext("The Project selection is stale.");
+                        }
+
+                        error = result.Error;
+                        savedId = result.Value?.Id.Value ?? Guid.Empty;
+                        break;
+                    }
+
+                    case ParaContextKind.Area:
+                    {
+                        CoreOperationResult<Area> result;
+                        if (IsCreatingContext)
+                        {
+                            var area = new Area(AreaId.New(), contextName);
+                            result = await _useCases.CreateAreaAsync(
+                                new CreateAreaCommand(area),
+                                cancellationToken);
+                        }
+                        else if (SelectedCatalogContext is
+                            { Kind: ParaContextKind.Area } selected)
+                        {
+                            result = await _useCases.UpdateAreaAsync(
+                                new UpdateAreaCommand(
+                                    new AreaId(selected.Id),
+                                    contextName),
+                                cancellationToken);
+                        }
+                        else
+                        {
+                            return FailContext("The Area selection is stale.");
+                        }
+
+                        error = result.Error;
+                        savedId = result.Value?.Id.Value ?? Guid.Empty;
+                        break;
+                    }
+
+                    case ParaContextKind.ResourceTopic:
+                    {
+                        CoreOperationResult<ResourceTopic> result;
+                        if (IsCreatingContext)
+                        {
+                            var topic = new ResourceTopic(
+                                ResourceTopicId.New(),
+                                contextName);
+                            result = await _useCases.CreateResourceTopicAsync(
+                                new CreateResourceTopicCommand(topic),
+                                cancellationToken);
+                        }
+                        else if (SelectedCatalogContext is
+                            { Kind: ParaContextKind.ResourceTopic } selected)
+                        {
+                            result = await _useCases.UpdateResourceTopicAsync(
+                                new UpdateResourceTopicCommand(
+                                    new ResourceTopicId(selected.Id),
+                                    contextName),
+                                cancellationToken);
+                        }
+                        else
+                        {
+                            return FailContext(
+                                "The Resource Topic selection is stale.");
+                        }
+
+                        error = result.Error;
+                        savedId = result.Value?.Id.Value ?? Guid.Empty;
+                        break;
+                    }
+
+                    default:
+                        return FailContext("Choose a supported context type.");
+                }
+
+                if (error is not null)
+                {
+                    return FailContext(error.Message);
+                }
+
+                var status = IsCreatingContext
+                    ? $"Created {ContextTypeName(ContextEditorKind)}."
+                    : $"Updated {ContextTypeName(ContextEditorKind)}.";
+                IsCreatingContext = false;
+                await RefreshAsync(
+                    null,
+                    cancellationToken,
+                    (ContextEditorKind, savedId));
+                if (SelectedCatalogContext is not null)
+                {
+                    PopulateContextForm(SelectedCatalogContext);
+                }
+
+                ContextEditorStatus = status;
+                return true;
+            });
+    }
+
+    public Task<bool> ArchiveSelectedContextAsync(
+        CancellationToken cancellationToken = default) =>
+        ChangeSelectedContextArchiveStateAsync(archive: true, cancellationToken);
+
+    public Task<bool> RestoreSelectedContextAsync(
+        CancellationToken cancellationToken = default) =>
+        ChangeSelectedContextArchiveStateAsync(archive: false, cancellationToken);
+
+    public async Task<bool> TransitionSelectedProjectAsync(
+        ProjectLifecycleTransition transition,
+        CancellationToken cancellationToken = default)
+    {
+        if (SelectedCatalogContext is not
+            { Kind: ParaContextKind.Project } selected)
+        {
+            return FailContext("Choose a Project first.");
+        }
+
+        return await RunContextOperationAsync(
+            async () =>
+            {
+                var result = await _useCases.TransitionProjectAsync(
+                    new TransitionProjectCommand(
+                        new ProjectId(selected.Id),
+                        transition),
+                    cancellationToken);
+                if (!result.IsSuccess)
+                {
+                    return FailContext(result.Error!.Message);
+                }
+
+                await RefreshAsync(
+                    null,
+                    cancellationToken,
+                    (ParaContextKind.Project, selected.Id));
+                if (SelectedCatalogContext is not null)
+                {
+                    PopulateContextForm(SelectedCatalogContext);
+                }
+
+                ContextEditorStatus = $"Project is now {result.Value!.Status}.";
+                return true;
+            });
+    }
 
     public async Task<bool> MoveSelectedAsync(
         ParaDestination? destination,
@@ -281,6 +656,69 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
             });
     }
 
+    private async Task<bool> ChangeSelectedContextArchiveStateAsync(
+        bool archive,
+        CancellationToken cancellationToken)
+    {
+        if (SelectedCatalogContext is not { } selected)
+        {
+            return FailContext("Choose a context first.");
+        }
+
+        return await RunContextOperationAsync(
+            async () =>
+            {
+                CoreOperationError? error = selected.Kind switch
+                {
+                    ParaContextKind.Project => archive
+                        ? (await _useCases.ArchiveProjectAsync(
+                            new ArchiveProjectCommand(new ProjectId(selected.Id)),
+                            cancellationToken)).Error
+                        : (await _useCases.RestoreProjectAsync(
+                            new RestoreProjectCommand(new ProjectId(selected.Id)),
+                            cancellationToken)).Error,
+                    ParaContextKind.Area => archive
+                        ? (await _useCases.ArchiveAreaAsync(
+                            new ArchiveAreaCommand(new AreaId(selected.Id)),
+                            cancellationToken)).Error
+                        : (await _useCases.RestoreAreaAsync(
+                            new RestoreAreaCommand(new AreaId(selected.Id)),
+                            cancellationToken)).Error,
+                    ParaContextKind.ResourceTopic => archive
+                        ? (await _useCases.ArchiveResourceTopicAsync(
+                            new ArchiveResourceTopicCommand(
+                                new ResourceTopicId(selected.Id)),
+                            cancellationToken)).Error
+                        : (await _useCases.RestoreResourceTopicAsync(
+                            new RestoreResourceTopicCommand(
+                                new ResourceTopicId(selected.Id)),
+                            cancellationToken)).Error,
+                    _ => new CoreOperationError(
+                        CoreOperationErrorCode.Validation,
+                        "Choose a supported context type."),
+                };
+
+                if (error is not null)
+                {
+                    return FailContext(error.Message);
+                }
+
+                await RefreshAsync(
+                    null,
+                    cancellationToken,
+                    (selected.Kind, selected.Id));
+                if (SelectedCatalogContext is not null)
+                {
+                    PopulateContextForm(SelectedCatalogContext);
+                }
+
+                ContextEditorStatus = archive
+                    ? $"Archived {ContextTypeName(selected.Kind)}."
+                    : $"Restored {ContextTypeName(selected.Kind)}.";
+                return true;
+            });
+    }
+
     partial void OnSelectedContextChanged(ParaContextItem? value) =>
         ApplyFilters();
 
@@ -300,6 +738,16 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
 
     partial void OnFavoritesOnlyChanged(bool value) =>
         ApplyFilters();
+
+    partial void OnSelectedCatalogContextChanged(ContextCatalogItem? value)
+    {
+        OnPropertyChanged(nameof(HasSelectedCatalogContext));
+        OnPropertyChanged(nameof(CanArchiveSelectedContext));
+        OnPropertyChanged(nameof(CanRestoreSelectedContext));
+        OnPropertyChanged(nameof(CanActivateSelectedProject));
+        OnPropertyChanged(nameof(CanCompleteSelectedProject));
+        OnPropertyChanged(nameof(CanCancelSelectedProject));
+    }
 
     private async Task<bool> ChangeArchiveStateAsync(
         bool archive,
@@ -351,20 +799,50 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         }
     }
 
+    private async Task<bool> RunContextOperationAsync(Func<Task<bool>> operation)
+    {
+        IsLoading = true;
+        ContextEditorError = null;
+        ContextEditorStatus = string.Empty;
+        try
+        {
+            return await operation();
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            return FailContext(
+                $"The context change could not be saved. {exception.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
     private async Task RefreshAsync(
         SecondBrainItemId? preferredItemId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        (ParaContextKind Kind, Guid Id)? preferredCatalogContext = null)
     {
         IsLoading = true;
         ErrorMessage = null;
         (ParaContextKind Kind, Guid? Id)? contextKey = SelectedContext is null
             ? null
             : (SelectedContext.Kind, SelectedContext.Id);
+        var catalogKey = preferredCatalogContext ??
+            (SelectedCatalogContext is null
+                ? null
+                : (SelectedCatalogContext.Kind, SelectedCatalogContext.Id));
 
         try
         {
             _state = await _repository.LoadStateAsync(cancellationToken);
             Contexts = BuildContexts(_state);
+            ContextCatalog = BuildContextCatalog(_state);
             Destinations = BuildDestinations(_state);
             TagFilters =
             [
@@ -379,6 +857,13 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
                 : Contexts.FirstOrDefault(context =>
                     context.Kind == contextKey.Value.Kind &&
                     context.Id == contextKey.Value.Id) ?? Contexts.FirstOrDefault();
+            SelectedCatalogContext = catalogKey is null
+                ? SelectedCatalogContext is null
+                    ? null
+                    : ContextCatalog.FirstOrDefault()
+                : ContextCatalog.FirstOrDefault(context =>
+                    context.Kind == catalogKey.Value.Kind &&
+                    context.Id == catalogKey.Value.Id);
             ApplyFilters(preferredItemId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -465,6 +950,60 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         SelectedTagToAdd = AvailableTags.FirstOrDefault();
         SelectedLinkTarget = AvailableLinkTargets.FirstOrDefault();
     }
+
+    private void PopulateContextForm(ContextCatalogItem context)
+    {
+        ContextEditorKind = context.Kind;
+        ContextName = context.Name;
+        ProjectOutcome = string.Empty;
+        ProjectPriority = ProjectPriority.Normal;
+        ProjectTargetDate = string.Empty;
+
+        if (context.Kind == ParaContextKind.Project && _state is not null)
+        {
+            var project = _state.Projects.SingleOrDefault(
+                candidate => candidate.Id.Value == context.Id);
+            if (project is not null)
+            {
+                ProjectOutcome = project.Outcome;
+                ProjectPriority = project.Priority;
+                ProjectTargetDate = project.TargetDate?.ToString("yyyy-MM-dd") ??
+                    string.Empty;
+            }
+        }
+
+        IsContextEditorVisible = true;
+        IsCreatingContext = false;
+    }
+
+    private static IReadOnlyList<ContextCatalogItem> BuildContextCatalog(
+        CoreKnowledgeState state) =>
+        state.Projects
+            .Select(project => new ContextCatalogItem(
+                ParaContextKind.Project,
+                project.Id.Value,
+                project.Name.Value,
+                $"{project.Status} · {project.Priority} · {project.Outcome}",
+                project.IsArchived,
+                project.Status))
+            .Concat(state.Areas
+                .Where(area => !IsInboxArea(area))
+                .Select(area => new ContextCatalogItem(
+                    ParaContextKind.Area,
+                    area.Id.Value,
+                    area.Name.Value,
+                    "Area",
+                    area.IsArchived)))
+            .Concat(state.ResourceTopics
+                .Select(topic => new ContextCatalogItem(
+                    ParaContextKind.ResourceTopic,
+                    topic.Id.Value,
+                    topic.Name.Value,
+                    "Resource topic",
+                    topic.IsArchived)))
+            .OrderBy(context => context.Kind)
+            .ThenBy(context => context.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
     private static IReadOnlyList<ParaContextItem> BuildContexts(
         CoreKnowledgeState state)
@@ -620,6 +1159,21 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         ErrorMessage = message;
         return false;
     }
+
+    private bool FailContext(string message)
+    {
+        ContextEditorError = message;
+        return false;
+    }
+
+    private static string ContextTypeName(ParaContextKind kind) =>
+        kind switch
+        {
+            ParaContextKind.Project => "Project",
+            ParaContextKind.Area => "Area",
+            ParaContextKind.ResourceTopic => "Resource Topic",
+            _ => "context",
+        };
 
     private static bool IsInboxArea(Area area) =>
         string.Equals(area.Name.Value, "Inbox", StringComparison.OrdinalIgnoreCase);
