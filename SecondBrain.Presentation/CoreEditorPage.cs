@@ -13,10 +13,13 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
     private readonly Picker _placementPicker;
     private readonly Picker _itemPicker;
     private readonly Picker _journalPicker;
+    private readonly CollectionView _sourceCaptures;
+    private readonly CollectionView _relationships;
     private readonly Entry _reminderEntry;
     private readonly Entry _reviewDateEntry;
     private readonly Entry _occurrenceDateEntry;
     private readonly Label _catalogMessage;
+    private readonly Label _relationshipMessage;
     private readonly Button _backToWorkspaceButton;
     private CoreKnowledgeState? _state;
     private BrainItemKind? _pendingCreateKind;
@@ -25,6 +28,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
     private (ParaContextKind Kind, Guid Id)? _returnWorkspace;
     private string _workspaceReturnRoute = "para";
     private string _directReturnRoute = "editor";
+    private SecondBrainItemId? _derivationReturnItemId;
 
     public CoreEditorPage(
         CoreEditorViewModel viewModel,
@@ -42,6 +46,18 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _placementPicker.ItemDisplayBinding = new Binding("Name.Value");
         _itemPicker = new Picker { Title = "Existing item" };
         _itemPicker.ItemDisplayBinding = new Binding(nameof(BrainItem.Title));
+        _sourceCaptures = BrainItemCollection(SelectionMode.Multiple);
+        _relationships = BrainItemCollection(SelectionMode.Single);
+        _relationships.SelectionChanged += async (_, args) =>
+        {
+            if (args.CurrentSelection.FirstOrDefault() is not BrainItem item)
+            {
+                return;
+            }
+
+            _relationships.SelectedItem = null;
+            await OpenRelatedItemAsync(item);
+        };
         _journalPicker = new Picker { Title = "Journal" };
         _journalPicker.ItemDisplayBinding = new Binding(nameof(Journal.Title));
         _journalPicker.SelectedIndexChanged += (_, _) =>
@@ -72,6 +88,12 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             TextColor = Colors.DarkRed,
             FontSize = 13
         };
+        _relationshipMessage = new Label
+        {
+            Text = "No source or derived links yet.",
+            TextColor = Colors.DarkSlateGray,
+            FontSize = 13
+        };
 
         _backToWorkspaceButton = new Button
         {
@@ -99,8 +121,11 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
                     NoteFields(),
                     IdeaFields(),
                     CaptureFields(),
+                    CaptureDerivationActions(),
+                    DerivationDraftFields(),
                     ResourceFields(),
                     JournalFields(),
+                    RelationshipFields(),
                     EditorState(),
                     Actions()
                 }
@@ -134,6 +159,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _returnWorkspace = null;
         _workspaceReturnRoute = "para";
         _directReturnRoute = "editor";
+        _derivationReturnItemId = null;
         _backToWorkspaceButton.Text = "← Back to workspace";
         _backToWorkspaceButton.IsVisible = false;
 
@@ -252,6 +278,8 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             SelectPlacement(item.PrimaryPlacement);
             SyncDateFields();
             SelectJournal(journalId);
+            SelectSourceCapture(item);
+            RefreshRelationships();
         };
 
         return Section("Edit", _itemPicker, button);
@@ -336,6 +364,68 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             processingState);
     }
 
+    private View CaptureDerivationActions()
+    {
+        var guidance = new Label
+        {
+            Text = "Select this capture and any additional captures to copy into a new authored item.",
+            TextColor = Colors.DarkSlateGray,
+            FontSize = 13
+        };
+        var createNote = new Button { Text = "Create Note from capture" };
+        createNote.Clicked += (_, _) => BeginDerivation(BrainItemKind.Note);
+        var createResource = new Button { Text = "Create Resource from capture" };
+        createResource.Clicked += (_, _) =>
+            BeginDerivation(BrainItemKind.ResourceArtifact);
+
+        return TypedSection(
+            "Create from captures",
+            nameof(_viewModel.IsCapture),
+            guidance,
+            _sourceCaptures,
+            new HorizontalStackLayout
+            {
+                Spacing = 10,
+                Children = { createNote, createResource }
+            });
+    }
+
+    private View DerivationDraftFields()
+    {
+        var sources = new Label { TextColor = Colors.DarkSlateGray };
+        sources.SetBinding(
+            Label.TextProperty,
+            nameof(_viewModel.DerivationSourceSummary));
+        var lifecycle = new Switch();
+        lifecycle.SetBinding(
+            Switch.IsToggledProperty,
+            nameof(_viewModel.MarkSourcesReferenced));
+
+        return TypedSection(
+            "Derived item sources",
+            nameof(_viewModel.IsDeriving),
+            sources,
+            new HorizontalStackLayout
+            {
+                Spacing = 10,
+                Children =
+                {
+                    lifecycle,
+                    new Label
+                    {
+                        Text = "Mark eligible source captures as Referenced when saved",
+                        VerticalTextAlignment = TextAlignment.Center
+                    }
+                }
+            });
+    }
+
+    private View RelationshipFields() =>
+        Section(
+            "Sources and derived items",
+            _relationshipMessage,
+            _relationships);
+
     private View ResourceFields()
     {
         var artifactKind = EnumPicker<ResourceArtifactKind>();
@@ -409,7 +499,20 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         var cancel = new Button { Text = "Cancel" };
         cancel.Clicked += async (_, _) =>
         {
+            var wasDeriving = _viewModel.IsDeriving;
             _viewModel.CancelCommand.Execute(null);
+            if (wasDeriving)
+            {
+                if (_viewModel.LastSavedItem is { } source)
+                {
+                    SelectPlacement(source.PrimaryPlacement);
+                    SelectSourceCapture(source);
+                }
+
+                RefreshRelationships();
+                return;
+            }
+
             if (_returnWorkspace is not null || _directReturnRoute != "editor")
             {
                 await NavigateBackAsync();
@@ -419,11 +522,24 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         var save = new Button { Text = "Save" };
         save.Clicked += async (_, _) =>
         {
+            var derivationOriginId = _viewModel.DerivationOriginId;
             await _viewModel.SaveCommand.ExecuteAsync(null);
             if (!_viewModel.HasError)
             {
                 await RefreshChoicesAsync();
-                if (_returnWorkspace is not null || _directReturnRoute != "editor")
+                if (_viewModel.LastSavedItem is { } saved)
+                {
+                    SelectPlacement(saved.PrimaryPlacement);
+                    RefreshRelationships();
+                }
+
+                if (derivationOriginId is not null)
+                {
+                    _derivationReturnItemId = derivationOriginId;
+                    _backToWorkspaceButton.Text = "← Back to source capture";
+                    _backToWorkspaceButton.IsVisible = true;
+                }
+                else if (_returnWorkspace is not null || _directReturnRoute != "editor")
                 {
                     await NavigateBackAsync();
                 }
@@ -465,6 +581,32 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         SyncDateFields();
     }
 
+    private void BeginDerivation(BrainItemKind kind)
+    {
+        if (TryGetPlacement(_placementPicker.SelectedItem) is not { } placement)
+        {
+            _catalogMessage.Text = "Choose an active placement for the derived item.";
+            return;
+        }
+
+        try
+        {
+            var sources = _sourceCaptures.SelectedItems?.Cast<BrainItem>() ?? [];
+            _viewModel.BeginDerivation(kind, sources, placement);
+            _kindPicker.SelectedItem = kind;
+            _catalogMessage.Text = string.Empty;
+            SyncDateFields();
+        }
+        catch (ArgumentException exception)
+        {
+            _catalogMessage.Text = exception.Message;
+        }
+        catch (InvalidOperationException exception)
+        {
+            _catalogMessage.Text = exception.Message;
+        }
+    }
+
     private async Task<bool> ApplyPendingNavigationAsync()
     {
         if (_pendingItemId is { } itemId)
@@ -486,6 +628,8 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             await _viewModel.LoadAsync(item.Id, journalId);
             SelectPlacement(item.PrimaryPlacement);
             SelectJournal(journalId);
+            SelectSourceCapture(item);
+            RefreshRelationships();
             SyncDateFields();
             return true;
         }
@@ -531,6 +675,64 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         return selected is not null;
     }
 
+    private void SelectSourceCapture(BrainItem item)
+    {
+        _sourceCaptures.SelectedItems?.Clear();
+        if (item.Kind == BrainItemKind.KnowledgeCapture && !item.IsArchived)
+        {
+            _sourceCaptures.SelectedItems?.Add(item);
+        }
+    }
+
+    private void RefreshRelationships()
+    {
+        if (_state is null || _viewModel.ItemId is not { } itemId)
+        {
+            _relationships.ItemsSource = Array.Empty<BrainItem>();
+            _relationshipMessage.Text = "No source or derived links yet.";
+            return;
+        }
+
+        var current = _state.BrainItems.SingleOrDefault(item => item.Id == itemId);
+        if (current is null)
+        {
+            _relationships.ItemsSource = Array.Empty<BrainItem>();
+            _relationshipMessage.Text = "Linked items are unavailable until refresh.";
+            return;
+        }
+
+        IEnumerable<SecondBrainItemId> linkedIds = current.Kind switch
+        {
+            BrainItemKind.KnowledgeCapture => current.DerivedItemLinks,
+            BrainItemKind.ResourceArtifact => current.ProvenanceSourceLinks,
+            _ => _state.BrainItems
+                .Where(item =>
+                    item.Kind == BrainItemKind.KnowledgeCapture &&
+                    item.DerivedItemLinks.Contains(current.Id))
+                .Select(item => item.Id),
+        };
+        var links = linkedIds
+            .Distinct()
+            .Select(id => _state.BrainItems.SingleOrDefault(item => item.Id == id))
+            .Where(item => item is not null)
+            .Cast<BrainItem>()
+            .OrderBy(item => item.Title)
+            .ToArray();
+        _relationships.ItemsSource = links;
+        _relationshipMessage.Text = links.Length == 0
+            ? "No source or derived links yet."
+            : "Select a linked item to open it.";
+    }
+
+    private async Task OpenRelatedItemAsync(BrainItem item)
+    {
+        await _viewModel.LoadAsync(item.Id);
+        SelectPlacement(item.PrimaryPlacement);
+        SelectSourceCapture(item);
+        RefreshRelationships();
+        SyncDateFields();
+    }
+
     private async Task OpenPlacementWorkspaceAsync(PrimaryPlacement placement)
     {
         var kind = placement.Kind switch
@@ -552,6 +754,26 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
 
     private async Task NavigateBackAsync()
     {
+        if (_derivationReturnItemId is { } sourceId)
+        {
+            _derivationReturnItemId = null;
+            var source = _state?.BrainItems.SingleOrDefault(item => item.Id == sourceId);
+            if (source is null)
+            {
+                _catalogMessage.Text =
+                    "The source capture is no longer available. Return to Inbox and refresh.";
+                return;
+            }
+
+            await _viewModel.LoadAsync(source.Id);
+            SelectPlacement(source.PrimaryPlacement);
+            SelectSourceCapture(source);
+            RefreshRelationships();
+            _backToWorkspaceButton.Text = $"← Back to {_directReturnRoute}";
+            _backToWorkspaceButton.IsVisible = _directReturnRoute != "editor";
+            return;
+        }
+
         if (_returnWorkspace is not { } workspace)
         {
             if (_directReturnRoute != "editor")
@@ -629,6 +851,10 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             _itemPicker.ItemsSource = items;
             _itemPicker.SelectedIndex = items.Length > 0 ? 0 : -1;
 
+            _sourceCaptures.ItemsSource = items
+                .Where(item => item.Kind == BrainItemKind.KnowledgeCapture)
+                .ToArray();
+
             var journals = _state.Journals.OrderBy(journal => journal.Title).ToArray();
             _journalPicker.ItemsSource = journals;
             SelectJournal(_viewModel.JournalEntry.JournalId);
@@ -636,6 +862,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             _catalogMessage.Text = placements.Length == 0
                 ? "Create an Area, Project, or Resource Topic before adding content."
                 : string.Empty;
+            RefreshRelationships();
         }
         catch (Exception exception)
         {
@@ -690,6 +917,33 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         {
             Title = typeof(T).Name,
             ItemsSource = Enum.GetValues<T>()
+        };
+
+    private static CollectionView BrainItemCollection(SelectionMode selectionMode) =>
+        new()
+        {
+            SelectionMode = selectionMode,
+            MaximumHeightRequest = 180,
+            ItemTemplate = new DataTemplate(() =>
+            {
+                var title = new Label
+                {
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = Colors.Black
+                };
+                title.SetBinding(Label.TextProperty, nameof(BrainItem.Title));
+                var kind = new Label
+                {
+                    FontSize = 12,
+                    TextColor = Colors.DarkSlateGray
+                };
+                kind.SetBinding(Label.TextProperty, nameof(BrainItem.Kind));
+                return new VerticalStackLayout
+                {
+                    Padding = new Thickness(4),
+                    Children = { title, kind }
+                };
+            })
         };
 
     private static Entry DateEntry(string placeholder) =>

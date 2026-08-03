@@ -65,7 +65,8 @@ public sealed class MainPage : ContentPage
                             nameof(viewModel.InboxItems),
                             nameof(viewModel.IsInboxEmpty),
                             "Inbox is clear. Capture a thought above.",
-                            "home"),
+                            "home",
+                            "Open to create a Note or Resource"),
                         ProjectSection(viewModel),
                         ItemSection(
                             "Favorites",
@@ -172,7 +173,8 @@ public sealed class MainPage : ContentPage
         string itemsProperty,
         string emptyProperty,
         string emptyMessage,
-        string returnRoute)
+        string returnRoute,
+        string? rowHint = null)
     {
         var collection = new CollectionView
         {
@@ -198,11 +200,22 @@ public sealed class MainPage : ContentPage
                 content.SetBinding(
                     Label.TextProperty,
                     nameof(DashboardItem.Content));
-                return new VerticalStackLayout
+                var layout = new VerticalStackLayout
                 {
                     Padding = new Thickness(0, 6),
                     Children = { titleLabel, content }
                 };
+                if (rowHint is not null)
+                {
+                    layout.Children.Add(new Label
+                    {
+                        Text = rowHint,
+                        FontSize = 12,
+                        TextColor = Colors.DarkSlateBlue
+                    });
+                }
+
+                return layout;
             })
         };
         collection.SetBinding(ItemsView.ItemsSourceProperty, itemsProperty);
@@ -411,6 +424,12 @@ public sealed class InboxPage : ContentPage
                 content.SetBinding(
                     Label.TextProperty,
                     nameof(DashboardItem.Content));
+                var hint = new Label
+                {
+                    Text = "Open to create a Note or Resource",
+                    FontSize = 12,
+                    TextColor = Colors.DarkSlateBlue
+                };
                 return new Border
                 {
                     Stroke = Colors.LightGray,
@@ -420,7 +439,7 @@ public sealed class InboxPage : ContentPage
                     Content = new VerticalStackLayout
                     {
                         Spacing = 4,
-                        Children = { title, content }
+                        Children = { title, content, hint }
                     }
                 };
             })

@@ -118,6 +118,123 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
             cancellationToken);
     }
 
+    public Task<CoreOperationResult<BrainItem>> DeriveBrainItemAsync(
+        DeriveBrainItemCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return MutateAsync(
+            state =>
+            {
+                if (command.Item is null)
+                {
+                    return Mutation<BrainItem>.Failed(
+                        CoreOperationErrorCode.Validation,
+                        "Derived item is required.");
+                }
+
+                if (command.Item.Kind is not (
+                    BrainItemKind.Note or BrainItemKind.ResourceArtifact))
+                {
+                    return Mutation<BrainItem>.Failed(
+                        CoreOperationErrorCode.Validation,
+                        "Only Notes and Resource Artifacts can be derived from captures.");
+                }
+
+                if (command.SourceCaptureIds is null ||
+                    command.SourceCaptureIds.Count == 0)
+                {
+                    return Mutation<BrainItem>.Failed(
+                        CoreOperationErrorCode.Validation,
+                        "Select at least one source capture.");
+                }
+
+                if (command.SourceCaptureIds.Distinct().Count() !=
+                    command.SourceCaptureIds.Count)
+                {
+                    return Mutation<BrainItem>.Failed(
+                        CoreOperationErrorCode.Validation,
+                        "Source captures cannot contain duplicates.");
+                }
+
+                if (state.BrainItems.Any(item => item.Id == command.Item.Id))
+                {
+                    return Mutation<BrainItem>.Failed(
+                        CoreOperationErrorCode.Conflict,
+                        $"Brain item '{command.Item.Id.Value}' already exists.");
+                }
+
+                var referenceError = ValidateBrainItemReferences(state, command.Item);
+                if (referenceError is not null)
+                {
+                    return Mutation<BrainItem>.Failed(referenceError);
+                }
+
+                var sources = new List<BrainItem>(command.SourceCaptureIds.Count);
+                foreach (var sourceId in command.SourceCaptureIds)
+                {
+                    var source = state.BrainItems.SingleOrDefault(
+                        item => item.Id == sourceId);
+                    if (source is null)
+                    {
+                        return Mutation<BrainItem>.NotFound(
+                            "Source capture",
+                            sourceId.Value);
+                    }
+
+                    if (source.Kind != BrainItemKind.KnowledgeCapture)
+                    {
+                        return Mutation<BrainItem>.Failed(
+                            CoreOperationErrorCode.Validation,
+                            $"Source '{source.Id.Value}' is not a Knowledge Capture.");
+                    }
+
+                    if (source.IsArchived)
+                    {
+                        return Mutation<BrainItem>.Failed(
+                            CoreOperationErrorCode.Conflict,
+                            $"Source capture '{source.Id.Value}' is archived.");
+                    }
+
+                    if (source.DerivedItemLinks.Contains(command.Item.Id))
+                    {
+                        return Mutation<BrainItem>.Failed(
+                            CoreOperationErrorCode.Conflict,
+                            $"Source capture '{source.Id.Value}' already links to the derived item.");
+                    }
+
+                    sources.Add(source);
+                }
+
+                if (command.Item.Kind == BrainItemKind.ResourceArtifact)
+                {
+                    foreach (var source in sources)
+                    {
+                        command.Item.AddProvenanceSource(source);
+                    }
+                }
+
+                var updatedSources = sources.ToDictionary(
+                    source => source.Id,
+                    source => CopyCaptureForDerivation(
+                        source,
+                        command.Item.Id,
+                        command.MarkSourcesReferenced));
+
+                return Mutation<BrainItem>.Succeeded(
+                    state with
+                    {
+                        BrainItems = state.BrainItems
+                            .Select(item => updatedSources.GetValueOrDefault(item.Id) ?? item)
+                            .Append(command.Item)
+                            .ToArray(),
+                    },
+                    command.Item);
+            },
+            cancellationToken);
+    }
+
     public Task<CoreOperationResult<Project>> CreateProjectAsync(
         CreateProjectCommand command,
         CancellationToken cancellationToken = default)
@@ -917,6 +1034,42 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
             default:
                 throw new ArgumentOutOfRangeException(nameof(transition));
         }
+    }
+
+    private static BrainItem CopyCaptureForDerivation(
+        BrainItem source,
+        SecondBrainItemId derivedItemId,
+        bool markReferenced)
+    {
+        var processingState = markReferenced &&
+            source.CaptureProcessingState is (
+                CaptureProcessingState.Captured or CaptureProcessingState.Consuming)
+            ? CaptureProcessingState.Referenced
+            : source.CaptureProcessingState;
+        var copy = new BrainItem(
+            source.Id,
+            source.Kind,
+            source.Title,
+            source.Content,
+            source.PrimaryPlacement,
+            source.CreatedAt,
+            tags: source.Tags,
+            contextualLinks: source.ContextualLinks,
+            updatedAt: source.UpdatedAt,
+            captureSourceType: source.CaptureSourceType,
+            sourceUri: source.SourceUri,
+            sourceCitation: source.SourceCitation,
+            reminderAt: source.ReminderAt,
+            captureProcessingState: processingState,
+            derivedItemLinks: source.DerivedItemLinks.Append(derivedItemId),
+            tagIds: source.TagIds,
+            links: source.Links);
+        if (source.IsFavorite)
+        {
+            copy.MarkFavorite();
+        }
+
+        return copy;
     }
 
 }

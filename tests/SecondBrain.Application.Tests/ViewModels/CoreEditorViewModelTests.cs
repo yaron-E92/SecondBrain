@@ -237,6 +237,114 @@ public sealed class CoreEditorViewModelTests
         });
     }
 
+    [Test]
+    public async Task Derivation_CopiesMultipleSourcesAndSavesTheAuthoredItem()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var first = CreateCapture(area.Id, "First", "First excerpt");
+        var second = CreateCapture(area.Id, "Second", "Second excerpt");
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Areas = [area],
+                BrainItems = [first, second],
+            });
+        var editor = new CoreEditorViewModel(
+            new CoreKnowledgeUseCases(repository),
+            () => _now.AddMinutes(1));
+        await editor.LoadAsync(first.Id);
+
+        editor.BeginDerivation(
+            BrainItemKind.Note,
+            [second],
+            PrimaryPlacement.InArea(area.Id));
+        editor.Title = "Combined note";
+        editor.MarkSourcesReferenced = true;
+        await editor.SaveCommand.ExecuteAsync(null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(editor.HasError, Is.False);
+            Assert.That(editor.IsDeriving, Is.False);
+            Assert.That(editor.LastSavedItem!.Kind, Is.EqualTo(BrainItemKind.Note));
+            Assert.That(editor.LastSavedItem.Content, Does.Contain("First excerpt"));
+            Assert.That(editor.LastSavedItem.Content, Does.Contain("Second excerpt"));
+            Assert.That(repository.State.BrainItems, Has.Count.EqualTo(3));
+            Assert.That(repository.SaveCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task Derivation_CancelLeavesSourcesUnchanged()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var first = CreateCapture(area.Id, "First", "First excerpt");
+        var second = CreateCapture(area.Id, "Second", "Second excerpt");
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Areas = [area],
+                BrainItems = [first, second],
+            });
+        var editor = new CoreEditorViewModel(
+            new CoreKnowledgeUseCases(repository),
+            () => _now.AddMinutes(1));
+        await editor.LoadAsync(first.Id);
+        editor.BeginDerivation(
+            BrainItemKind.ResourceArtifact,
+            [second],
+            PrimaryPlacement.InArea(area.Id));
+        editor.Title = "Discard me";
+
+        editor.CancelCommand.Execute(null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(editor.Kind, Is.EqualTo(BrainItemKind.KnowledgeCapture));
+            Assert.That(editor.ItemId, Is.EqualTo(first.Id));
+            Assert.That(editor.IsDeriving, Is.False);
+            Assert.That(repository.State.BrainItems, Has.Count.EqualTo(2));
+            Assert.That(repository.SaveCount, Is.Zero);
+            Assert.That(first.DerivedItemLinks, Is.Empty);
+            Assert.That(second.DerivedItemLinks, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task Derivation_SaveFailureRetainsDraftWithoutOrphanLinks()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var source = CreateCapture(area.Id, "Source", "Keep this excerpt");
+        var repository = new FakeRepository(
+            EmptyState() with { Areas = [area], BrainItems = [source] },
+            saveException: new InvalidOperationException("Disk unavailable"));
+        var editor = new CoreEditorViewModel(
+            new CoreKnowledgeUseCases(repository),
+            () => _now.AddMinutes(1));
+        await editor.LoadAsync(source.Id);
+        editor.BeginDerivation(
+            BrainItemKind.Note,
+            [],
+            PrimaryPlacement.InArea(area.Id));
+        editor.Title = "Retryable note";
+        editor.MarkSourcesReferenced = true;
+
+        await editor.SaveCommand.ExecuteAsync(null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(editor.ErrorMessage, Does.Contain("Disk unavailable"));
+            Assert.That(editor.IsDeriving, Is.True);
+            Assert.That(editor.Title, Is.EqualTo("Retryable note"));
+            Assert.That(editor.Content, Does.Contain("Keep this excerpt"));
+            Assert.That(repository.State.BrainItems, Has.Count.EqualTo(1));
+            Assert.That(source.DerivedItemLinks, Is.Empty);
+            Assert.That(
+                source.CaptureProcessingState,
+                Is.EqualTo(CaptureProcessingState.Captured));
+        });
+    }
+
     private static void ConfigureTypedFields(
         CoreEditorViewModel editor,
         BrainItemKind kind,
@@ -378,16 +486,22 @@ public sealed class CoreEditorViewModelTests
             ideaMaturity: IdeaMaturity.Captured);
 
     private static BrainItem CreateCapture(AreaId areaId) =>
+        CreateCapture(areaId, "Capture", "Capture content");
+
+    private static BrainItem CreateCapture(
+        AreaId areaId,
+        string title,
+        string content) =>
         new(
             SecondBrainItemId.New(),
             BrainItemKind.KnowledgeCapture,
-            "Capture",
-            "Capture content",
+            title,
+            content,
             PrimaryPlacement.InArea(areaId),
             _now,
             captureSourceType: CaptureSourceType.Article,
-            sourceUri: new Uri("https://example.com/capture"),
-            sourceCitation: "Capture source",
+            sourceUri: new Uri($"https://example.com/{title.ToLowerInvariant()}"),
+            sourceCitation: $"{title} source",
             captureProcessingState: CaptureProcessingState.Captured);
 
     private static BrainItem CreateResource(AreaId areaId) =>
