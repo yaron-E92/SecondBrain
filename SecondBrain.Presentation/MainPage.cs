@@ -64,18 +64,21 @@ public sealed class MainPage : ContentPage
                             "Inbox",
                             nameof(viewModel.InboxItems),
                             nameof(viewModel.IsInboxEmpty),
-                            "Inbox is clear. Capture a thought above."),
+                            "Inbox is clear. Capture a thought above.",
+                            "home"),
                         ProjectSection(viewModel),
                         ItemSection(
                             "Favorites",
                             nameof(viewModel.Favorites),
                             nameof(viewModel.AreFavoritesEmpty),
-                            "Mark an item as a favorite to keep it close."),
+                            "Mark an item as a favorite to keep it close.",
+                            "home"),
                         ItemSection(
                             "Recent",
                             nameof(viewModel.RecentItems),
                             nameof(viewModel.AreRecentItemsEmpty),
-                            "Your recently updated items will appear here."),
+                            "Your recently updated items will appear here.",
+                            "home"),
                         ModuleSection(viewModel)
                     }
                 }
@@ -168,11 +171,12 @@ public sealed class MainPage : ContentPage
         string title,
         string itemsProperty,
         string emptyProperty,
-        string emptyMessage)
+        string emptyMessage,
+        string returnRoute)
     {
         var collection = new CollectionView
         {
-            SelectionMode = SelectionMode.None,
+            SelectionMode = SelectionMode.Single,
             ItemTemplate = new DataTemplate(() =>
             {
                 var titleLabel = new Label
@@ -202,12 +206,33 @@ public sealed class MainPage : ContentPage
             })
         };
         collection.SetBinding(ItemsView.ItemsSourceProperty, itemsProperty);
+        collection.SelectionChanged += async (_, args) =>
+        {
+            if (args.CurrentSelection.FirstOrDefault() is not DashboardItem item)
+            {
+                return;
+            }
+
+            collection.SelectedItem = null;
+            await OpenItemAsync(item, returnRoute);
+        };
 
         return Section(
             title,
             EmptyState(emptyProperty, emptyMessage),
             collection);
     }
+
+    private static async Task OpenItemAsync(
+        DashboardItem item,
+        string returnRoute) =>
+        await Shell.Current.GoToAsync(
+            "//editor",
+            new Dictionary<string, object>
+            {
+                ["itemId"] = item.Id.Value.ToString(),
+                ["returnRoute"] = returnRoute,
+            });
 
     private static View ModuleSection(DashboardViewModel viewModel)
     {
@@ -367,7 +392,7 @@ public sealed class InboxPage : ContentPage
 
         var items = new CollectionView
         {
-            SelectionMode = SelectionMode.None,
+            SelectionMode = SelectionMode.Single,
             ItemTemplate = new DataTemplate(() =>
             {
                 var title = new Label
@@ -401,6 +426,22 @@ public sealed class InboxPage : ContentPage
             })
         };
         items.SetBinding(ItemsView.ItemsSourceProperty, nameof(viewModel.Items));
+        items.SelectionChanged += async (_, args) =>
+        {
+            if (args.CurrentSelection.FirstOrDefault() is not DashboardItem item)
+            {
+                return;
+            }
+
+            items.SelectedItem = null;
+            await Shell.Current.GoToAsync(
+                "//editor",
+                new Dictionary<string, object>
+                {
+                    ["itemId"] = item.Id.Value.ToString(),
+                    ["returnRoute"] = "inbox",
+                });
+        };
 
         var emptyMessage = new Label
         {
