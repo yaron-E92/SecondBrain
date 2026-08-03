@@ -120,7 +120,9 @@ public sealed class CoreSmokeJourneyTests
         await inbox.LoadCommand.ExecuteAsync(null);
         var captured = repository.State.BrainItems.Single();
 
-        var editor = new CoreEditorViewModel(useCases, () => _now.AddMinutes(2));
+        var editor = new CoreEditorViewModel(
+            useCases,
+            () => captured.UpdatedAt.AddTicks(1));
         await editor.LoadAsync(captured.Id);
         editor.Title = "Launch outline review";
         editor.Content = "Typed Idea content ready for the project.";
