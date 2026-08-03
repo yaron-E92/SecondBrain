@@ -24,6 +24,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
     private PrimaryPlacement? _pendingPlacement;
     private (ParaContextKind Kind, Guid Id)? _returnWorkspace;
     private string _workspaceReturnRoute = "para";
+    private string _directReturnRoute = "editor";
 
     public CoreEditorPage(
         CoreEditorViewModel viewModel,
@@ -79,7 +80,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             IsVisible = false
         };
         _backToWorkspaceButton.Clicked += async (_, _) =>
-            await NavigateToWorkspaceAsync();
+            await NavigateBackAsync();
 
         Content = new ScrollView
         {
@@ -132,6 +133,8 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _pendingPlacement = null;
         _returnWorkspace = null;
         _workspaceReturnRoute = "para";
+        _directReturnRoute = "editor";
+        _backToWorkspaceButton.Text = "← Back to workspace";
         _backToWorkspaceButton.IsVisible = false;
 
         var contextKind = default(ParaContextKind);
@@ -169,6 +172,13 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             itemId != Guid.Empty)
         {
             _pendingItemId = new SecondBrainItemId(itemId);
+            TryGetQueryValue(query, "returnRoute", out var returnRoute);
+            _directReturnRoute = NormalizeReturnRoute(returnRoute);
+            if (_directReturnRoute is "home" or "inbox")
+            {
+                _backToWorkspaceButton.Text = $"← Back to {_directReturnRoute}";
+                _backToWorkspaceButton.IsVisible = true;
+            }
         }
     }
 
@@ -400,9 +410,9 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         cancel.Clicked += async (_, _) =>
         {
             _viewModel.CancelCommand.Execute(null);
-            if (_returnWorkspace is not null)
+            if (_returnWorkspace is not null || _directReturnRoute != "editor")
             {
-                await NavigateToWorkspaceAsync();
+                await NavigateBackAsync();
             }
         };
 
@@ -413,9 +423,9 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             if (!_viewModel.HasError)
             {
                 await RefreshChoicesAsync();
-                if (_returnWorkspace is not null)
+                if (_returnWorkspace is not null || _directReturnRoute != "editor")
                 {
-                    await NavigateToWorkspaceAsync();
+                    await NavigateBackAsync();
                 }
                 else
                 {
@@ -540,10 +550,15 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             });
     }
 
-    private async Task NavigateToWorkspaceAsync()
+    private async Task NavigateBackAsync()
     {
         if (_returnWorkspace is not { } workspace)
         {
+            if (_directReturnRoute != "editor")
+            {
+                await Shell.Current.GoToAsync($"//{_directReturnRoute}");
+            }
+
             return;
         }
 
@@ -573,6 +588,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         returnRoute?.Trim().ToLowerInvariant() switch
         {
             "home" => "home",
+            "inbox" => "inbox",
             "editor" => "editor",
             _ => "para",
         };

@@ -1015,6 +1015,7 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         returnRoute?.Trim().ToLowerInvariant() switch
         {
             "home" => "home",
+            "inbox" => "inbox",
             "editor" => "editor",
             _ => "para",
         };

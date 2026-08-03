@@ -44,6 +44,13 @@ dotnet build SecondBrain.slnx --configuration Debug --no-restore
 dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore
 ```
 
+Core UX changes must also complete the applicable rows in the
+[SecondBrain Core smoke journeys](docs/verification/core-smoke-journeys.md).
+In the pull request, cite the journey IDs exercised, the automated command
+result, and the Android and Windows manual evidence (or an explicit platform
+N/A). This matrix is the shared product-level verification contract; do not
+replace it with one-off smoke steps.
+
 Format the solution explicitly with:
 
 ```bash
