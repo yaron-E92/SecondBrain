@@ -16,6 +16,8 @@ public sealed partial class CoreEditorViewModel : ObservableObject
     private DateTimeOffset _createdAt;
     private bool _suppressDirtyTracking;
     private bool _needsJournalAttachment;
+    private BrainItem? _derivationOrigin;
+    private IReadOnlyList<BrainItem> _derivationSources = [];
 
     [ObservableProperty]
     public partial string Title { get; set; } = string.Empty;
@@ -35,6 +37,9 @@ public sealed partial class CoreEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial BrainItem? LastSavedItem { get; set; }
+
+    [ObservableProperty]
+    public partial bool MarkSourcesReferenced { get; set; }
 
     public CoreEditorViewModel(
         CoreKnowledgeUseCases useCases,
@@ -77,6 +82,14 @@ public sealed partial class CoreEditorViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
+    public bool IsDeriving => _derivationSources.Count > 0;
+
+    public SecondBrainItemId? DerivationOriginId => _derivationOrigin?.Id;
+
+    public string DerivationSourceSummary => string.Join(
+        Environment.NewLine,
+        _derivationSources.Select(source => $"• {source.Title} — {source.SourceCitation}"));
+
     public bool IsNote => Kind == BrainItemKind.Note;
 
     public bool IsIdea => Kind == BrainItemKind.Idea;
@@ -100,6 +113,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         _suppressDirtyTracking = true;
         try
         {
+            ClearDerivation();
             ItemId = null;
             Kind = kind;
             IsNew = true;
@@ -121,6 +135,54 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         }
     }
 
+    public void BeginDerivation(
+        BrainItemKind kind,
+        IEnumerable<BrainItem> selectedSources,
+        PrimaryPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(selectedSources);
+        ArgumentNullException.ThrowIfNull(placement);
+        if (kind is not (BrainItemKind.Note or BrainItemKind.ResourceArtifact))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(kind),
+                "Only Notes and Resource Artifacts can be derived from captures.");
+        }
+
+        var origin = LastSavedItem;
+        if (origin?.Kind != BrainItemKind.KnowledgeCapture || origin.IsArchived)
+        {
+            throw new InvalidOperationException(
+                "Open an active Knowledge Capture before creating a derived item.");
+        }
+
+        var sources = selectedSources
+            .Append(origin)
+            .DistinctBy(source => source.Id)
+            .ToArray();
+        if (sources.Any(source =>
+                source.Kind != BrainItemKind.KnowledgeCapture || source.IsArchived))
+        {
+            throw new ArgumentException(
+                "Every derivation source must be an active Knowledge Capture.",
+                nameof(selectedSources));
+        }
+
+        BeginCreate(kind, placement);
+        _derivationOrigin = origin;
+        _derivationSources = sources;
+        MarkSourcesReferenced = false;
+        Content = string.Join(
+            $"{Environment.NewLine}{Environment.NewLine}",
+            sources.Select(source =>
+                $"{source.Title}{Environment.NewLine}" +
+                $"Source: {source.SourceCitation}{Environment.NewLine}" +
+                $"{source.Content}"));
+        _original = CaptureSnapshot();
+        IsDirty = true;
+        NotifyDerivationChanged();
+    }
+
     public async Task LoadAsync(
         SecondBrainItemId itemId,
         SecondBrainItemId? journalId = null,
@@ -140,6 +202,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
                 return;
             }
 
+            ClearDerivation();
             LoadItem(result.Value!, journalId);
         }
         catch (Exception exception)
@@ -168,9 +231,16 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             if (IsNew)
             {
                 var item = CreateItem();
-                saveResult = await _useCases.CreateBrainItemAsync(
-                    new CreateBrainItemCommand(item),
-                    cancellationToken);
+                saveResult = IsDeriving
+                    ? await _useCases.DeriveBrainItemAsync(
+                        new DeriveBrainItemCommand(
+                            item,
+                            _derivationSources.Select(source => source.Id).ToArray(),
+                            MarkSourcesReferenced),
+                        cancellationToken)
+                    : await _useCases.CreateBrainItemAsync(
+                        new CreateBrainItemCommand(item),
+                        cancellationToken);
                 if (!saveResult.IsSuccess)
                 {
                     ErrorMessage = saveResult.Error!.Message;
@@ -179,6 +249,7 @@ public sealed partial class CoreEditorViewModel : ObservableObject
 
                 ItemId = item.Id;
                 IsNew = false;
+                ClearDerivation();
                 NotifyEditorShapeChanged();
             }
             else
@@ -251,6 +322,13 @@ public sealed partial class CoreEditorViewModel : ObservableObject
     [RelayCommand]
     private void Cancel()
     {
+        if (IsDeriving && _derivationOrigin is { } origin)
+        {
+            ClearDerivation();
+            LoadItem(origin, null);
+            return;
+        }
+
         if (_original is null)
         {
             return;
@@ -577,6 +655,21 @@ public sealed partial class CoreEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsCapture));
         OnPropertyChanged(nameof(IsResource));
         OnPropertyChanged(nameof(IsJournalEntry));
+    }
+
+    private void ClearDerivation()
+    {
+        _derivationOrigin = null;
+        _derivationSources = [];
+        MarkSourcesReferenced = false;
+        NotifyDerivationChanged();
+    }
+
+    private void NotifyDerivationChanged()
+    {
+        OnPropertyChanged(nameof(IsDeriving));
+        OnPropertyChanged(nameof(DerivationOriginId));
+        OnPropertyChanged(nameof(DerivationSourceSummary));
     }
 
 }

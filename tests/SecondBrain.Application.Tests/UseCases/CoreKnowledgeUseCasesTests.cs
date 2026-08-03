@@ -343,6 +343,101 @@ public sealed class CoreKnowledgeUseCasesTests
         });
     }
 
+    [TestCase(BrainItemKind.Note)]
+    [TestCase(BrainItemKind.ResourceArtifact)]
+    public async Task DeriveBrainItem_LinksEveryCaptureInOneSave(
+        BrainItemKind derivedKind)
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var first = CreateCapture(area.Id, "First", "First excerpt");
+        var second = CreateCapture(area.Id, "Second", "Second excerpt");
+        var derived = derivedKind == BrainItemKind.Note
+            ? new BrainItem(
+                SecondBrainItemId.New(),
+                BrainItemKind.Note,
+                "Derived note",
+                "Source: First citation\nFirst excerpt\n\n" +
+                "Source: Second citation\nSecond excerpt",
+                PrimaryPlacement.InArea(area.Id),
+                CreatedAt,
+                noteKind: NoteKind.General)
+            : new BrainItem(
+                SecondBrainItemId.New(),
+                BrainItemKind.ResourceArtifact,
+                "Derived resource",
+                "Source: First citation\nFirst excerpt\n\n" +
+                "Source: Second citation\nSecond excerpt",
+                PrimaryPlacement.InArea(area.Id),
+                CreatedAt,
+                resourceArtifactKind: ResourceArtifactKind.Guide,
+                resourceFreshness: ResourceFreshness.Draft);
+        var repository = new FakeCoreKnowledgeRepository(
+            EmptyState() with
+            {
+                Areas = [area],
+                BrainItems = [first, second],
+            });
+
+        var result = await new CoreKnowledgeUseCases(repository)
+            .DeriveBrainItemAsync(
+                new DeriveBrainItemCommand(
+                    derived,
+                    [first.Id, second.Id],
+                    MarkSourcesReferenced: true));
+
+        var savedSources = repository.State.BrainItems
+            .Where(item => item.Kind == BrainItemKind.KnowledgeCapture)
+            .ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsSuccess, Is.True);
+            Assert.That(repository.SaveCount, Is.EqualTo(1));
+            Assert.That(repository.State.BrainItems, Has.Count.EqualTo(3));
+            Assert.That(
+                savedSources.All(source => source.DerivedItemLinks.Contains(derived.Id)),
+                Is.True);
+            Assert.That(
+                savedSources.All(source =>
+                    source.CaptureProcessingState == CaptureProcessingState.Referenced),
+                Is.True);
+            Assert.That(derived.Content, Does.Contain("First citation"));
+            Assert.That(derived.Content, Does.Contain("Second citation"));
+            Assert.That(
+                derived.ProvenanceSourceLinks,
+                derivedKind == BrainItemKind.ResourceArtifact
+                    ? Is.EquivalentTo(new[] { first.Id, second.Id })
+                    : Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task DeriveBrainItem_InvalidSourceCreatesNoItemOrLinks()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var source = CreateCapture(area.Id, "Source", "Excerpt");
+        var derived = CreateNote(area.Id);
+        var repository = new FakeCoreKnowledgeRepository(
+            EmptyState() with { Areas = [area], BrainItems = [source] });
+
+        var result = await new CoreKnowledgeUseCases(repository)
+            .DeriveBrainItemAsync(
+                new DeriveBrainItemCommand(
+                    derived,
+                    [source.Id, SecondBrainItemId.New()],
+                    MarkSourcesReferenced: true));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Error!.Code, Is.EqualTo(CoreOperationErrorCode.NotFound));
+            Assert.That(repository.SaveCount, Is.Zero);
+            Assert.That(repository.State.BrainItems, Has.Count.EqualTo(1));
+            Assert.That(source.DerivedItemLinks, Is.Empty);
+            Assert.That(
+                source.CaptureProcessingState,
+                Is.EqualTo(CaptureProcessingState.Captured));
+        });
+    }
+
     private static CoreKnowledgeState EmptyState() =>
         new([], [], [], [], [], []);
 
@@ -399,6 +494,22 @@ public sealed class CoreKnowledgeUseCasesTests
             PrimaryPlacement.InArea(areaId),
             CreatedAt,
             ideaMaturity: IdeaMaturity.Captured);
+
+    private static BrainItem CreateCapture(
+        AreaId areaId,
+        string title,
+        string content) =>
+        new(
+            SecondBrainItemId.New(),
+            BrainItemKind.KnowledgeCapture,
+            title,
+            content,
+            PrimaryPlacement.InArea(areaId),
+            CreatedAt,
+            captureSourceType: CaptureSourceType.Article,
+            sourceUri: new Uri($"https://example.com/{title.ToLowerInvariant()}"),
+            sourceCitation: $"{title} citation",
+            captureProcessingState: CaptureProcessingState.Captured);
 
     private sealed class FakeCoreKnowledgeRepository(CoreKnowledgeState state)
         : ICoreKnowledgeRepository
