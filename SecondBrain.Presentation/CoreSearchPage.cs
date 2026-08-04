@@ -180,7 +180,7 @@ public sealed class CoreSearchPage : ContentPage
             "Archive state",
             nameof(viewModel.ArchiveOptions),
             nameof(viewModel.SelectedArchive));
-        return new Grid
+        var grid = new Grid
         {
             ColumnDefinitions =
             {
@@ -191,15 +191,20 @@ public sealed class CoreSearchPage : ContentPage
             {
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto)
-            },
-            Children =
-            {
-                { kind, 0, 0 },
-                { tag, 1, 0 },
-                { placement, 0, 1 },
-                { archive, 1, 1 }
             }
         };
+        AddToGrid(grid, kind, 0, 0);
+        AddToGrid(grid, tag, 1, 0);
+        AddToGrid(grid, placement, 0, 1);
+        AddToGrid(grid, archive, 1, 1);
+        return grid;
+    }
+
+    private static void AddToGrid(Grid grid, View view, int column, int row)
+    {
+        Grid.SetColumn(view, column);
+        Grid.SetRow(view, row);
+        grid.Children.Add(view);
     }
 
     private static Picker FilterPicker(

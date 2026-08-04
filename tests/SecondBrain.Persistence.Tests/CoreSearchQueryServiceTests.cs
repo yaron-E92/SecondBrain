@@ -66,7 +66,7 @@ public sealed class CoreSearchQueryServiceTests
     {
         await using var context = await CreatePopulatedContextAsync();
         var service = new CoreSearchQueryService(context);
-        var areaId = await context.Areas.Select(row => row.Id).SingleAsync();
+        var areaId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
         var filtered = await service.SearchAsync(new CoreSearchQuery(
             Kind: BrainItemKind.Note,
