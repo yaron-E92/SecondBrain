@@ -19,6 +19,7 @@ public static class SecondBrainPersistenceRegistration
         services.AddScoped<SecondBrainDataStore>();
         services.AddScoped<ICoreKnowledgeRepository>(
             provider => provider.GetRequiredService<SecondBrainDataStore>());
+        services.AddScoped<ICoreSearchQueryService, CoreSearchQueryService>();
         services.AddSingleton<SecondBrainPersistenceInitializer>();
         return services;
     }
