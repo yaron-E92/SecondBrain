@@ -73,8 +73,8 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
             string.Equals(mode, "browse", StringComparison.OrdinalIgnoreCase))
         {
             _viewModel.CloseWorkspace();
-            TryGetQueryValue(query, "returnRoute", out var returnRoute);
-            _browserReturnRoute = returnRoute == "editor" ? "editor" : "para";
+            TryGetQueryValue(query, "returnRoute", out var browseReturnRoute);
+            _browserReturnRoute = browseReturnRoute == "editor" ? "editor" : "para";
             TryGetQueryValue(query, "itemKind", out _returnEditorItemKind);
             TryGetQueryValue(query, "journalId", out _returnEditorJournalId);
             TryGetQueryValue(query, "editorReturnRoute", out var editorReturnRoute);
