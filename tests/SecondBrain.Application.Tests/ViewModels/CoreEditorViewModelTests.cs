@@ -165,6 +165,55 @@ public sealed class CoreEditorViewModelTests
     }
 
     [Test]
+    public async Task ExistingJournalEntry_CanChangeItsDateAndTimelinePosition()
+    {
+        var area = new Area(AreaId.New(), new ParaContextName("Writing"));
+        var first = new BrainItem(
+            SecondBrainItemId.New(),
+            BrainItemKind.JournalEntry,
+            "First",
+            "First content",
+            PrimaryPlacement.InArea(area.Id),
+            _now,
+            entryDate: new DateOnly(2026, 8, 2));
+        var moved = new BrainItem(
+            SecondBrainItemId.New(),
+            BrainItemKind.JournalEntry,
+            "Moved",
+            "Moved content",
+            PrimaryPlacement.InArea(area.Id),
+            _now,
+            entryDate: new DateOnly(2026, 8, 3));
+        var journal = new Journal(SecondBrainItemId.New(), "Daily");
+        journal.AddEntry(first);
+        journal.AddEntry(moved);
+        var repository = new FakeRepository(
+            EmptyState() with
+            {
+                Areas = [area],
+                BrainItems = [first, moved],
+                Journals = [journal],
+            });
+        var editor = new CoreEditorViewModel(
+            new CoreKnowledgeUseCases(repository),
+            () => _now.AddHours(1));
+        await editor.LoadAsync(moved.Id, journal.Id);
+        editor.JournalEntry.OccurrenceDate = new DateOnly(2026, 8, 1);
+
+        await editor.SaveCommand.ExecuteAsync(null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(editor.HasError, Is.False);
+            Assert.That(moved.EntryDate, Is.EqualTo(new DateOnly(2026, 8, 1)));
+            Assert.That(
+                journal.Entries.Select(entry => entry.Id),
+                Is.EqualTo(new[] { moved.Id, first.Id }));
+            Assert.That(repository.SaveCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public async Task InvalidInput_RemainsEditableWithFeedback()
     {
         var area = new Area(AreaId.New(), new ParaContextName("Writing"));

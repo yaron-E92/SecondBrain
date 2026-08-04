@@ -187,6 +187,10 @@ public sealed class CoreKnowledgeUseCasesTests
                 new MoveTagCommand(childTag.Id, rootTag.Id))).IsSuccess,
             (await useCases.RenameJournalAsync(
                 new RenameJournalCommand(journal.Id, "After"))).IsSuccess,
+            (await useCases.ArchiveJournalAsync(
+                new ArchiveJournalCommand(journal.Id))).IsSuccess,
+            (await useCases.RestoreJournalAsync(
+                new RestoreJournalCommand(journal.Id))).IsSuccess,
         };
 
         Assert.Multiple(() =>
@@ -199,7 +203,8 @@ public sealed class CoreKnowledgeUseCasesTests
             Assert.That(topic.IsArchived, Is.False);
             Assert.That(childTag.Parent, Is.SameAs(rootTag));
             Assert.That(journal.Title, Is.EqualTo("After"));
-            Assert.That(repository.SaveCount, Is.EqualTo(8));
+            Assert.That(journal.IsArchived, Is.False);
+            Assert.That(repository.SaveCount, Is.EqualTo(10));
         });
     }
 

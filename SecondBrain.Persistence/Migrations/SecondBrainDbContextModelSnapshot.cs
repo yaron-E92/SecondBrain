@@ -158,6 +158,7 @@ public sealed class SecondBrainDbContextModelSnapshot : ModelSnapshot
         journals.HasKey(row => row.Id);
         journals.Property(row => row.Id).ValueGeneratedNever();
         journals.Property(row => row.Title).HasMaxLength(500).IsRequired();
+        journals.Property(row => row.IsArchived).IsRequired();
 
         var entries = modelBuilder.Entity<JournalEntryRow>();
         entries.ToTable("JournalEntries");

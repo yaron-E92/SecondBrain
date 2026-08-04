@@ -26,6 +26,8 @@ public sealed class Journal
 
     public string Title { get; private set; }
 
+    public bool IsArchived { get; private set; }
+
     public IReadOnlyList<BrainItem> Entries =>
         _entries
             .OrderBy(entry => entry.EntryDate)
@@ -34,6 +36,8 @@ public sealed class Journal
 
     public void Rename(string title)
     {
+        EnsureNotArchived();
+
         if (string.IsNullOrWhiteSpace(title))
         {
             throw new ArgumentException("Journal title cannot be empty.", nameof(title));
@@ -44,6 +48,7 @@ public sealed class Journal
 
     public void AddEntry(BrainItem entry)
     {
+        EnsureNotArchived();
         ArgumentNullException.ThrowIfNull(entry);
 
         if (entry.Kind != BrainItemKind.JournalEntry)
@@ -59,5 +64,33 @@ public sealed class Journal
         }
 
         _entries.Add(entry);
+    }
+
+    public void Archive()
+    {
+        if (IsArchived)
+        {
+            throw new InvalidOperationException("Journal is already archived.");
+        }
+
+        IsArchived = true;
+    }
+
+    public void Restore()
+    {
+        if (!IsArchived)
+        {
+            throw new InvalidOperationException("Journal is not archived.");
+        }
+
+        IsArchived = false;
+    }
+
+    private void EnsureNotArchived()
+    {
+        if (IsArchived)
+        {
+            throw new InvalidOperationException("Archived journals cannot be changed.");
+        }
     }
 }

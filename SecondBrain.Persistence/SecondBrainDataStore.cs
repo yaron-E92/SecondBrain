@@ -91,6 +91,7 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
             {
                 Id = journal.Id.Value,
                 Title = journal.Title,
+                IsArchived = journal.IsArchived,
             }));
         context.JournalEntries.AddRange(
             snapshot.Journals.SelectMany(journal =>
@@ -170,6 +171,11 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
             foreach (var entry in journalEntries[row.Id])
             {
                 journal.AddEntry(brainItems[entry.BrainItemId]);
+            }
+
+            if (row.IsArchived)
+            {
+                journal.Archive();
             }
 
             return journal;

@@ -30,6 +30,8 @@
              Link="ViewModels\IdeaEditorSection.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\JournalEntryEditorSection.cs"
              Link="ViewModels\JournalEntryEditorSection.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\JournalBrowserViewModel.cs"
+             Link="ViewModels\JournalBrowserViewModel.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\NoteEditorSection.cs"
              Link="ViewModels\NoteEditorSection.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\ResourceEditorSection.cs"

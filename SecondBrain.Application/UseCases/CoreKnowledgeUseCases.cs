@@ -386,6 +386,24 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
             cancellationToken);
     }
 
+    public Task<CoreOperationResult<BrainItem>> UpdateJournalEntryAsync(
+        UpdateJournalEntryCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return MutateExistingAsync(
+            state => state.BrainItems.SingleOrDefault(item => item.Id == command.Id),
+            "Journal entry",
+            command.Id.Value,
+            item => item.UpdateJournalEntry(
+                command.Title,
+                command.Content,
+                command.EntryDate,
+                command.UpdatedAt),
+            cancellationToken);
+    }
+
     public Task<CoreOperationResult<BrainItem>> MoveBrainItemAsync(
         MoveBrainItemCommand command,
         CancellationToken cancellationToken = default)
@@ -494,6 +512,26 @@ public sealed class CoreKnowledgeUseCases(ICoreKnowledgeRepository repository)
             journal => journal.Rename(command.Title),
             cancellationToken);
     }
+
+    public Task<CoreOperationResult<Journal>> ArchiveJournalAsync(
+        ArchiveJournalCommand command,
+        CancellationToken cancellationToken = default) =>
+        ChangeArchiveStateAsync(
+            state => state.Journals.SingleOrDefault(journal => journal.Id == command.Id),
+            "Journal",
+            command.Id.Value,
+            journal => journal.Archive(),
+            cancellationToken);
+
+    public Task<CoreOperationResult<Journal>> RestoreJournalAsync(
+        RestoreJournalCommand command,
+        CancellationToken cancellationToken = default) =>
+        ChangeArchiveStateAsync(
+            state => state.Journals.SingleOrDefault(journal => journal.Id == command.Id),
+            "Journal",
+            command.Id.Value,
+            journal => journal.Restore(),
+            cancellationToken);
 
     public Task<CoreOperationResult<BrainItem>> ArchiveBrainItemAsync(
         ArchiveBrainItemCommand command,
