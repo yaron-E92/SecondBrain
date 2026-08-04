@@ -254,13 +254,22 @@ public sealed partial class CoreEditorViewModel : ObservableObject
             }
             else
             {
-                saveResult = await _useCases.UpdateBrainItemAsync(
-                    new UpdateBrainItemCommand(
-                        ItemId!.Value,
-                        Title,
-                        Content,
-                        _utcNow()),
-                    cancellationToken);
+                saveResult = Kind == BrainItemKind.JournalEntry
+                    ? await _useCases.UpdateJournalEntryAsync(
+                        new UpdateJournalEntryCommand(
+                            ItemId!.Value,
+                            Title,
+                            Content,
+                            JournalEntry.OccurrenceDate!.Value,
+                            _utcNow()),
+                        cancellationToken)
+                    : await _useCases.UpdateBrainItemAsync(
+                        new UpdateBrainItemCommand(
+                            ItemId!.Value,
+                            Title,
+                            Content,
+                            _utcNow()),
+                        cancellationToken);
                 if (!saveResult.IsSuccess)
                 {
                     ErrorMessage = saveResult.Error!.Message;

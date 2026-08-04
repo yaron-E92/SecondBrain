@@ -24,6 +24,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
     private CoreKnowledgeState? _state;
     private BrainItemKind? _pendingCreateKind;
     private SecondBrainItemId? _pendingItemId;
+    private SecondBrainItemId? _pendingJournalId;
     private PrimaryPlacement? _pendingPlacement;
     private (ParaContextKind Kind, Guid Id)? _returnWorkspace;
     private string _workspaceReturnRoute = "para";
@@ -155,6 +156,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
     {
         _pendingCreateKind = null;
         _pendingItemId = null;
+        _pendingJournalId = null;
         _pendingPlacement = null;
         _returnWorkspace = null;
         _workspaceReturnRoute = "para";
@@ -192,6 +194,20 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             Enum.TryParse<BrainItemKind>(itemKindValue, true, out var itemKind))
         {
             _pendingCreateKind = itemKind;
+            TryGetQueryValue(query, "returnRoute", out var returnRoute);
+            _directReturnRoute = NormalizeReturnRoute(returnRoute);
+            if (_directReturnRoute != "editor")
+            {
+                _backToWorkspaceButton.Text = $"← Back to {_directReturnRoute}";
+                _backToWorkspaceButton.IsVisible = true;
+            }
+
+            if (TryGetQueryValue(query, "journalId", out var journalIdValue) &&
+                Guid.TryParse(journalIdValue, out var journalId) &&
+                journalId != Guid.Empty)
+            {
+                _pendingJournalId = new SecondBrainItemId(journalId);
+            }
         }
         else if (TryGetQueryValue(query, "itemId", out var itemIdValue) &&
             Guid.TryParse(itemIdValue, out var itemId) &&
@@ -200,7 +216,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             _pendingItemId = new SecondBrainItemId(itemId);
             TryGetQueryValue(query, "returnRoute", out var returnRoute);
             _directReturnRoute = NormalizeReturnRoute(returnRoute);
-            if (_directReturnRoute is "home" or "inbox" or "search")
+            if (_directReturnRoute != "editor")
             {
                 _backToWorkspaceButton.Text = $"← Back to {_directReturnRoute}";
                 _backToWorkspaceButton.IsVisible = true;
@@ -457,13 +473,19 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _journalPicker.SetBinding(
             IsEnabledProperty,
             nameof(_viewModel.AreTypeFieldsEditable));
-        _occurrenceDateEntry.SetBinding(
-            IsEnabledProperty,
-            nameof(_viewModel.AreTypeFieldsEditable));
+        var manageJournals = new Button
+        {
+            Text = "Create or manage Journals",
+            HorizontalOptions = LayoutOptions.Start,
+        };
+        manageJournals.Clicked += async (_, _) =>
+            await Shell.Current.GoToAsync("//journals");
+
         return TypedSection(
             "Journal entry",
             nameof(_viewModel.IsJournalEntry),
             _journalPicker,
+            manageJournals,
             _occurrenceDateEntry);
     }
 
@@ -634,10 +656,20 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             return true;
         }
 
-        if (_pendingCreateKind is not { } kind ||
-            _pendingPlacement is not { } placement)
+        if (_pendingCreateKind is not { } kind)
         {
             return false;
+        }
+
+        var placement = _pendingPlacement ??
+            TryGetPlacement(_placementPicker.SelectedItem);
+        if (placement is null)
+        {
+            _pendingCreateKind = null;
+            _pendingJournalId = null;
+            _catalogMessage.Text =
+                "Create an Area, Project, or Resource Topic before adding this Journal entry.";
+            return true;
         }
 
         _pendingCreateKind = null;
@@ -654,13 +686,22 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _viewModel.BeginCreate(kind, placement);
         if (kind == BrainItemKind.JournalEntry)
         {
-            _journalPicker.SelectedIndex =
-                _journalPicker.ItemsSource?.Count > 0 ? 0 : -1;
+            if (_pendingJournalId is { } journalId)
+            {
+                SelectJournal(journalId);
+            }
+            else
+            {
+                _journalPicker.SelectedIndex =
+                    _journalPicker.ItemsSource?.Count > 0 ? 0 : -1;
+            }
             _viewModel.JournalEntry.JournalId =
                 (_journalPicker.SelectedItem as Journal)?.Id;
             _viewModel.JournalEntry.OccurrenceDate =
                 DateOnly.FromDateTime(DateTime.Today);
         }
+
+        _pendingJournalId = null;
 
         SyncDateFields();
         return true;
@@ -812,6 +853,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             "home" => "home",
             "inbox" => "inbox",
             "search" => "search",
+            "journals" => "journals",
             "editor" => "editor",
             _ => "para",
         };
@@ -856,7 +898,10 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
                 .Where(item => item.Kind == BrainItemKind.KnowledgeCapture)
                 .ToArray();
 
-            var journals = _state.Journals.OrderBy(journal => journal.Title).ToArray();
+            var journals = _state.Journals
+                .Where(journal => !journal.IsArchived)
+                .OrderBy(journal => journal.Title)
+                .ToArray();
             _journalPicker.ItemsSource = journals;
             SelectJournal(_viewModel.JournalEntry.JournalId);
 

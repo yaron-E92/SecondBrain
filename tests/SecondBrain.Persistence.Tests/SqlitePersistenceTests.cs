@@ -33,7 +33,12 @@ public sealed class SqlitePersistenceTests
 
         Assert.That(File.Exists(path), Is.True);
         var migrations = await context.Database.GetAppliedMigrationsAsync();
-        Assert.That(migrations, Is.EqualTo(["20260724153000_InitialCorePersistence"]));
+        Assert.That(
+            migrations,
+            Is.EqualTo([
+                "20260724153000_InitialCorePersistence",
+                "20260804090000_AddJournalArchiveState",
+            ]));
     }
 
     [Test]
@@ -70,6 +75,7 @@ public sealed class SqlitePersistenceTests
                 loaded.BrainItems.Single(item => item.Kind == BrainItemKind.ResourceArtifact).ProvenanceSourceLinks,
                 Has.Count.EqualTo(1));
             Assert.That(loaded.Journals.Single().Entries, Has.Count.EqualTo(1));
+            Assert.That(loaded.Journals.Single().IsArchived, Is.True);
         });
     }
 
@@ -227,6 +233,7 @@ public sealed class SqlitePersistenceTests
             provenanceSources: [capture]);
         var journal = new Journal(SecondBrainItemId.New(), "Engineering journal");
         journal.AddEntry(entry);
+        journal.Archive();
 
         return new SecondBrainDataSnapshot(
             [project],

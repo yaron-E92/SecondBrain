@@ -172,7 +172,7 @@ public sealed class BrainItem
 
     public IdeaMaturity? IdeaMaturity { get; private set; }
 
-    public DateOnly? EntryDate { get; }
+    public DateOnly? EntryDate { get; private set; }
 
     public CaptureSourceType? CaptureSourceType { get; }
 
@@ -229,6 +229,36 @@ public sealed class BrainItem
         EnsureUpdatedAtDoesNotMoveBackward(updatedAt);
         Title = title.Trim();
         Content = content.Trim();
+        UpdatedAt = updatedAt;
+    }
+
+    public void UpdateJournalEntry(
+        string title,
+        string content,
+        DateOnly entryDate,
+        DateTimeOffset updatedAt)
+    {
+        EnsureActive();
+        if (Kind != BrainItemKind.JournalEntry)
+        {
+            throw new InvalidOperationException(
+                "Only Journal Entries have an occurrence date.");
+        }
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("Brain item title cannot be empty.", nameof(title));
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new ArgumentException("Brain item content cannot be empty.", nameof(content));
+        }
+
+        EnsureUpdatedAtDoesNotMoveBackward(updatedAt);
+        Title = title.Trim();
+        Content = content.Trim();
+        EntryDate = entryDate;
         UpdatedAt = updatedAt;
     }
 

@@ -158,6 +158,40 @@ public sealed class BrainItemsTests
     }
 
     [Test]
+    public void JournalArchiveRestore_PreservesEntriesAndControlsMutation()
+    {
+        var journal = new Journal(SecondBrainItemId.New(), "Daily");
+        var entry = CreateItem(
+            BrainItemKind.JournalEntry,
+            entryDate: new DateOnly(2026, 7, 24));
+        journal.AddEntry(entry);
+
+        journal.Archive();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(journal.IsArchived, Is.True);
+            Assert.That(journal.Entries, Is.EqualTo(new[] { entry }));
+            Assert.Throws<InvalidOperationException>(() => journal.Rename("Changed"));
+            Assert.Throws<InvalidOperationException>(() => journal.AddEntry(
+                CreateItem(
+                    BrainItemKind.JournalEntry,
+                    entryDate: new DateOnly(2026, 7, 25))));
+            Assert.Throws<InvalidOperationException>(journal.Archive);
+        });
+
+        journal.Restore();
+        journal.Rename("Changed");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(journal.IsArchived, Is.False);
+            Assert.That(journal.Title, Is.EqualTo("Changed"));
+            Assert.Throws<InvalidOperationException>(journal.Restore);
+        });
+    }
+
+    [Test]
     public void JournalEntry_CarriesValidatedContextualLinks()
     {
         var linkedItemId = SecondBrainItemId.New();
