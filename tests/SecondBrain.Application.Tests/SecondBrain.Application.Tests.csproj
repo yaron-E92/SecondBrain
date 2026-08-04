@@ -36,6 +36,8 @@
              Link="ViewModels\ResourceEditorSection.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\DashboardViewModels.cs"
              Link="ViewModels\DashboardViewModels.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\CoreSearchViewModel.cs"
+             Link="ViewModels\CoreSearchViewModel.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\ParaBrowserViewModel.cs"
              Link="ViewModels\ParaBrowserViewModel.cs" />
   </ItemGroup>

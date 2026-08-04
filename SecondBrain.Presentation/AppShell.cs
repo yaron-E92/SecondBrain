@@ -6,6 +6,7 @@ public sealed class AppShell : Shell
         MainPage mainPage,
         InboxPage inboxPage,
         ParaBrowserPage paraBrowserPage,
+        CoreSearchPage searchPage,
         CoreEditorPage coreEditorPage)
     {
         Title = "SecondBrain";
@@ -31,6 +32,12 @@ public sealed class AppShell : Shell
                     Route = "para",
                     Title = "PARA",
                     Content = paraBrowserPage
+                },
+                new ShellContent
+                {
+                    Route = "search",
+                    Title = "Search",
+                    Content = searchPage
                 },
                 new ShellContent
                 {

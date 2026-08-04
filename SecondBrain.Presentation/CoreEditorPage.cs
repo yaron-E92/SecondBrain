@@ -200,7 +200,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             _pendingItemId = new SecondBrainItemId(itemId);
             TryGetQueryValue(query, "returnRoute", out var returnRoute);
             _directReturnRoute = NormalizeReturnRoute(returnRoute);
-            if (_directReturnRoute is "home" or "inbox")
+            if (_directReturnRoute is "home" or "inbox" or "search")
             {
                 _backToWorkspaceButton.Text = $"← Back to {_directReturnRoute}";
                 _backToWorkspaceButton.IsVisible = true;
@@ -811,6 +811,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         {
             "home" => "home",
             "inbox" => "inbox",
+            "search" => "search",
             "editor" => "editor",
             _ => "para",
         };

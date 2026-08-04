@@ -22,11 +22,13 @@ public static class MauiProgram
         builder.Services.AddSingleton<InboxViewModel>();
         builder.Services.AddSingleton<DashboardViewModel>();
         builder.Services.AddSingleton<ParaBrowserViewModel>();
+        builder.Services.AddSingleton<CoreSearchViewModel>();
         builder.Services.AddSingleton<CoreEditorViewModel>();
         builder.Services.AddSingleton<AppShell>();
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddSingleton<InboxPage>();
         builder.Services.AddSingleton<ParaBrowserPage>();
+        builder.Services.AddSingleton<CoreSearchPage>();
         builder.Services.AddSingleton<CoreEditorPage>();
 
         var app = builder.Build();

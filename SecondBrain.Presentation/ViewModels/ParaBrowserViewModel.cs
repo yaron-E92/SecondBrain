@@ -1016,6 +1016,7 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
         {
             "home" => "home",
             "inbox" => "inbox",
+            "search" => "search",
             "editor" => "editor",
             _ => "para",
         };
