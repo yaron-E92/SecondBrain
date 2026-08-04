@@ -8,6 +8,10 @@ namespace SecondBrain.Presentation;
 public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
 {
     private readonly ParaBrowserViewModel _viewModel;
+    private string _browserReturnRoute = "para";
+    private string? _returnEditorItemKind;
+    private string? _returnEditorJournalId;
+    private string _returnEditorFinalRoute = "editor";
 
     public ParaBrowserPage(ParaBrowserViewModel viewModel)
     {
@@ -69,6 +73,12 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
             string.Equals(mode, "browse", StringComparison.OrdinalIgnoreCase))
         {
             _viewModel.CloseWorkspace();
+            TryGetQueryValue(query, "returnRoute", out var returnRoute);
+            _browserReturnRoute = returnRoute == "editor" ? "editor" : "para";
+            TryGetQueryValue(query, "itemKind", out _returnEditorItemKind);
+            TryGetQueryValue(query, "journalId", out _returnEditorJournalId);
+            TryGetQueryValue(query, "editorReturnRoute", out var editorReturnRoute);
+            _returnEditorFinalRoute = editorReturnRoute is "journals" ? "journals" : "editor";
             return;
         }
 
@@ -591,7 +601,31 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
             nameof(_viewModel.ContextEditorStatus));
 
         var save = new Button { Text = "Save" };
-        save.Clicked += async (_, _) => await _viewModel.SaveContextAsync();
+        save.Clicked += async (_, _) =>
+        {
+            if (!await _viewModel.SaveContextAsync() ||
+                _browserReturnRoute != "editor")
+            {
+                return;
+            }
+
+            var itemKind = _returnEditorItemKind;
+            var journalId = _returnEditorJournalId;
+            var finalRoute = _returnEditorFinalRoute;
+            _browserReturnRoute = "para";
+            _returnEditorItemKind = null;
+            _returnEditorJournalId = null;
+            _returnEditorFinalRoute = "editor";
+            await Shell.Current.GoToAsync(
+                "//editor",
+                new Dictionary<string, object>
+                {
+                    ["mode"] = "create",
+                    ["itemKind"] = itemKind ?? BrainItemKind.Note.ToString(),
+                    ["journalId"] = journalId ?? string.Empty,
+                    ["returnRoute"] = finalRoute,
+                });
+        };
         var cancel = new Button { Text = "Cancel" };
         cancel.Clicked += (_, _) => _viewModel.CancelContextEdit();
 

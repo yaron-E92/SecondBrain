@@ -232,9 +232,19 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             HorizontalOptions = LayoutOptions.Start
         };
         createContext.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync(
-                "//para",
-                new Dictionary<string, object> { ["mode"] = "browse" });
+        {
+            var query = new Dictionary<string, object> { ["mode"] = "browse" };
+            if (_pendingCreateKind == BrainItemKind.JournalEntry &&
+                _pendingJournalId is { } journalId)
+            {
+                query["returnRoute"] = "editor";
+                query["editorReturnRoute"] = _directReturnRoute;
+                query["itemKind"] = BrainItemKind.JournalEntry.ToString();
+                query["journalId"] = journalId.Value.ToString();
+            }
+
+            await Shell.Current.GoToAsync("//para", query);
+        };
 
         var openPlacement = new Button
         {
@@ -665,8 +675,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             TryGetPlacement(_placementPicker.SelectedItem);
         if (placement is null)
         {
-            _pendingCreateKind = null;
-            _pendingJournalId = null;
+            _kindPicker.SelectedItem = kind;
             _catalogMessage.Text =
                 "Create an Area, Project, or Resource Topic before adding this Journal entry.";
             return true;
