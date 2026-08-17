@@ -34,6 +34,8 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
 
     internal DbSet<JournalEntryRow> JournalEntries => Set<JournalEntryRow>();
 
+    internal DbSet<ReviewStateRow> ReviewStates => Set<ReviewStateRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureProjects(modelBuilder);
@@ -43,6 +45,7 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
         ConfigureBrainItems(modelBuilder);
         ConfigureBrainItemCollections(modelBuilder);
         ConfigureJournals(modelBuilder);
+        ConfigureReviewStates(modelBuilder);
     }
 
     private static void ConfigureProjects(ModelBuilder modelBuilder)
@@ -233,5 +236,20 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
             .WithMany()
             .HasForeignKey(row => row.BrainItemId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureReviewStates(ModelBuilder modelBuilder)
+    {
+        var reviews = modelBuilder.Entity<ReviewStateRow>();
+        reviews.ToTable("ReviewStates", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_ReviewStates_TargetKind",
+                "TargetKind BETWEEN 0 AND 3");
+            table.HasCheckConstraint(
+                "CK_ReviewStates_TargetId",
+                "TargetId <> '00000000-0000-0000-0000-000000000000'");
+        });
+        reviews.HasKey(row => new { row.TargetKind, row.TargetId });
     }
 }

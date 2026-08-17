@@ -20,7 +20,8 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
             snapshot.ResourceTopics,
             snapshot.Tags,
             snapshot.BrainItems,
-            snapshot.Journals);
+            snapshot.Journals,
+            snapshot.ReviewStates);
     }
 
     public Task SaveStateAsync(
@@ -36,7 +37,8 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
                 state.ResourceTopics,
                 state.Tags,
                 state.BrainItems,
-                state.Journals),
+                state.Journals,
+                state.ReviewStates),
             cancellationToken);
     }
 
@@ -51,6 +53,7 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
 
         context.JournalEntries.RemoveRange(context.JournalEntries);
         context.Journals.RemoveRange(context.Journals);
+        context.ReviewStates.RemoveRange(context.ReviewStates);
         context.BrainItemRelations.RemoveRange(context.BrainItemRelations);
         context.BrainItemLinks.RemoveRange(context.BrainItemLinks);
         context.BrainItemTags.RemoveRange(context.BrainItemTags);
@@ -100,6 +103,14 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
                     JournalId = journal.Id.Value,
                     BrainItemId = entry.Id.Value,
                 })));
+        context.ReviewStates.AddRange(
+            (snapshot.ReviewStates ?? []).Select(review => new ReviewStateRow
+            {
+                TargetKind = review.TargetKind,
+                TargetId = review.TargetId,
+                LastReviewedAt = review.LastReviewedAt,
+                DeferredUntil = review.DeferredUntil,
+            }));
 
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -180,6 +191,13 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
 
             return journal;
         }).ToArray();
+        var reviewStates = await context.ReviewStates.AsNoTracking()
+            .Select(row => new ReviewState(
+                row.TargetKind,
+                row.TargetId,
+                row.LastReviewedAt,
+                row.DeferredUntil))
+            .ToArrayAsync(cancellationToken);
 
         return new SecondBrainDataSnapshot(
             projects,
@@ -187,7 +205,8 @@ public sealed class SecondBrainDataStore(SecondBrainDbContext context)
             resourceTopics,
             tags,
             brainItems.Values.OrderBy(item => item.Id.Value).ToArray(),
-            journals);
+            journals,
+            reviewStates);
     }
 
     private static ProjectRow ToRow(Project project) =>

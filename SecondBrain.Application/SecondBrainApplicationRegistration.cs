@@ -12,6 +12,7 @@ public static class SecondBrainApplicationRegistration
 
         services.AddSingleton<GetApplicationStatusUseCase>();
         services.AddScoped<CoreKnowledgeUseCases>();
+        services.AddScoped<ReviewUseCase>();
         return services;
     }
 }
