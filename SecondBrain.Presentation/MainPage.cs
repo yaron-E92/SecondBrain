@@ -60,6 +60,10 @@ public sealed class MainPage : ContentPage
                             captureEditor,
                             captureButton,
                             captureStatus),
+                        Section(
+                            "Review",
+                            ReviewButton("Start Inbox review", "inbox", "home"),
+                            ReviewButton("Review due PARA items", "para", "home")),
                         ItemSection(
                             "Inbox",
                             nameof(viewModel.InboxItems),
@@ -291,6 +295,27 @@ public sealed class MainPage : ContentPage
             collection);
     }
 
+    private static Button ReviewButton(
+        string text,
+        string kind,
+        string returnRoute)
+    {
+        var button = new Button
+        {
+            Text = text,
+            HorizontalOptions = LayoutOptions.Start,
+        };
+        button.Clicked += async (_, _) =>
+            await Shell.Current.GoToAsync(
+                "//review",
+                new Dictionary<string, object>
+                {
+                    ["kind"] = kind,
+                    ["returnRoute"] = returnRoute,
+                });
+        return button;
+    }
+
     private static View Header(string title, string subtitle) =>
         new VerticalStackLayout
         {
@@ -518,6 +543,19 @@ public sealed class InboxPage : ContentPage
             FontAttributes = FontAttributes.Bold,
             TextColor = Colors.Black
         };
+        var reviewButton = new Button
+        {
+            Text = "Start Inbox review",
+            HorizontalOptions = LayoutOptions.Start,
+        };
+        reviewButton.Clicked += async (_, _) =>
+            await Shell.Current.GoToAsync(
+                "//review",
+                new Dictionary<string, object>
+                {
+                    ["kind"] = "inbox",
+                    ["returnRoute"] = "inbox",
+                });
         var statePanel = new VerticalStackLayout
         {
             Spacing = 8,
@@ -530,9 +568,10 @@ public sealed class InboxPage : ContentPage
             }
         };
         Grid.SetRow(heading, 0);
-        Grid.SetRow(loading, 1);
-        Grid.SetRow(statePanel, 2);
-        Grid.SetRow(items, 3);
+        Grid.SetRow(reviewButton, 1);
+        Grid.SetRow(loading, 2);
+        Grid.SetRow(statePanel, 3);
+        Grid.SetRow(items, 4);
 
         Content = new Grid
         {
@@ -542,11 +581,13 @@ public sealed class InboxPage : ContentPage
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Star)
             },
             Children =
             {
                 heading,
+                reviewButton,
                 loading,
                 statePanel,
                 items

@@ -25,6 +25,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<CoreSearchViewModel>();
         builder.Services.AddSingleton<CoreEditorViewModel>();
         builder.Services.AddSingleton<JournalBrowserViewModel>();
+        builder.Services.AddSingleton<ReviewViewModel>();
         builder.Services.AddSingleton<AppShell>();
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddSingleton<InboxPage>();
@@ -32,6 +33,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<CoreSearchPage>();
         builder.Services.AddSingleton<CoreEditorPage>();
         builder.Services.AddSingleton<JournalBrowserPage>();
+        builder.Services.AddSingleton<ReviewPage>();
 
         var app = builder.Build();
         app.Services

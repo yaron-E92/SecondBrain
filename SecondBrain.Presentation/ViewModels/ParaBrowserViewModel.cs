@@ -425,6 +425,36 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
     private async Task LoadAsync(CancellationToken cancellationToken) =>
         await RefreshAsync(null, cancellationToken);
 
+    public bool SelectItemForMove(SecondBrainItemId itemId)
+    {
+        if (_state is null)
+        {
+            return Fail("Move destinations could not be loaded. Retry the review move.");
+        }
+
+        var item = _state.BrainItems.SingleOrDefault(candidate => candidate.Id == itemId);
+        var context = item is null
+            ? null
+            : Contexts.FirstOrDefault(candidate => IsInContext(_state, item, candidate));
+        if (item is null || context is null)
+        {
+            return Fail("The review item is no longer available to move. Return to the review and retry.");
+        }
+
+        SelectedKindFilter = KindFilters[0];
+        SelectedTagFilter = TagFilters[0];
+        FavoritesOnly = false;
+        SelectedContext = context;
+        ApplyFilters(itemId);
+        if (SelectedItem?.Id != itemId)
+        {
+            return Fail("The review item could not be selected. Return to the review and retry.");
+        }
+
+        StatusMessage = "Choose an active destination for this review item.";
+        return true;
+    }
+
     public void BeginCreateContext(ParaContextKind kind)
     {
         if (kind is not (
@@ -1017,6 +1047,7 @@ public sealed partial class ParaBrowserViewModel : ObservableObject
             "home" => "home",
             "inbox" => "inbox",
             "search" => "search",
+            "review" => "review",
             "editor" => "editor",
             _ => "para",
         };

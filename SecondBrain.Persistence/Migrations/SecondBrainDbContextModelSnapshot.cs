@@ -17,6 +17,7 @@ public sealed class SecondBrainDbContextModelSnapshot : ModelSnapshot
         ConfigureBrainItems(modelBuilder);
         ConfigureCollections(modelBuilder);
         ConfigureJournals(modelBuilder);
+        ConfigureReviewStates(modelBuilder);
     }
 
     private static void ConfigureContexts(ModelBuilder modelBuilder)
@@ -168,5 +169,20 @@ public sealed class SecondBrainDbContextModelSnapshot : ModelSnapshot
             .OnDelete(DeleteBehavior.Cascade);
         entries.HasOne<BrainItemRow>().WithMany().HasForeignKey(row => row.BrainItemId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureReviewStates(ModelBuilder modelBuilder)
+    {
+        var reviews = modelBuilder.Entity<ReviewStateRow>();
+        reviews.ToTable("ReviewStates", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_ReviewStates_TargetKind",
+                "TargetKind BETWEEN 0 AND 3");
+            table.HasCheckConstraint(
+                "CK_ReviewStates_TargetId",
+                "TargetId <> '00000000-0000-0000-0000-000000000000'");
+        });
+        reviews.HasKey(row => new { row.TargetKind, row.TargetId });
     }
 }

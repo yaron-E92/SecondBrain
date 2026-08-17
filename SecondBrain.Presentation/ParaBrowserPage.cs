@@ -1,6 +1,7 @@
 using Microsoft.Maui.Controls.Shapes;
 using SecondBrain.Application.UseCases;
 using SecondBrain.Domain.Entities;
+using SecondBrain.Domain.ValueObjects;
 using SecondBrain.Presentation.ViewModels;
 
 namespace SecondBrain.Presentation;
@@ -12,6 +13,8 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
     private string? _returnEditorItemKind;
     private string? _returnEditorJournalId;
     private string _returnEditorFinalRoute = "editor";
+    private SecondBrainItemId? _reviewMoveItemId;
+    private string? _moveReturnRoute;
 
     public ParaBrowserPage(ParaBrowserViewModel viewModel)
     {
@@ -65,10 +68,28 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
     {
         base.OnAppearing();
         await _viewModel.LoadCommand.ExecuteAsync(null);
+        if (_reviewMoveItemId is { } itemId)
+        {
+            _viewModel.SelectItemForMove(itemId);
+        }
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
+        if (TryGetQueryValue(query, "mode", out var moveMode) &&
+            string.Equals(moveMode, "move", StringComparison.OrdinalIgnoreCase))
+        {
+            _viewModel.CloseWorkspace();
+            _reviewMoveItemId = TryGetQueryValue(query, "itemId", out var itemId) &&
+                Guid.TryParse(itemId, out var parsedItemId)
+                ? new SecondBrainItemId(parsedItemId)
+                : null;
+            TryGetQueryValue(query, "returnRoute", out _moveReturnRoute);
+            return;
+        }
+
+        _reviewMoveItemId = null;
+        _moveReturnRoute = null;
         if (TryGetQueryValue(query, "mode", out var mode) &&
             string.Equals(mode, "browse", StringComparison.OrdinalIgnoreCase))
         {
@@ -270,6 +291,13 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
             Text = "Edit or organize this workspace",
             HorizontalOptions = LayoutOptions.Start
         };
+
+        var review = new Button
+        {
+            Text = "Review this workspace",
+            HorizontalOptions = LayoutOptions.Start,
+        };
+        review.Clicked += async (_, _) => await OpenWorkspaceReviewAsync();
         manage.Clicked += (_, _) =>
         {
             var selected = _viewModel.SelectedCatalogContext;
@@ -298,7 +326,8 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
                             createJournal
                         }
                     },
-                    manage),
+                    manage,
+                    review),
                 empty,
                 WorkspaceItemSection(
                     "Captures",
@@ -341,6 +370,32 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
             available);
         content.SetBinding(IsVisibleProperty, nameof(_viewModel.IsWorkspaceOpen));
         return content;
+    }
+
+    private async Task OpenWorkspaceReviewAsync()
+    {
+        var workspace = _viewModel.Workspace;
+        if (workspace is null)
+        {
+            return;
+        }
+
+        var scopeKind = workspace.Kind switch
+        {
+            ParaContextKind.Project => ReviewScopeKind.Project,
+            ParaContextKind.Area => ReviewScopeKind.Area,
+            ParaContextKind.ResourceTopic => ReviewScopeKind.ResourceTopic,
+            _ => throw new InvalidOperationException("Unknown PARA workspace."),
+        };
+        await Shell.Current.GoToAsync(
+            "//review",
+            new Dictionary<string, object>
+            {
+                ["kind"] = "para",
+                ["scopeKind"] = scopeKind.ToString(),
+                ["scopeId"] = workspace.Id.ToString(),
+                ["returnRoute"] = "para",
+            });
     }
 
     private View WorkspaceItemSection(
@@ -974,7 +1029,14 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
                 "Move",
                 "Cancel"))
             {
-                await _viewModel.MoveSelectedAsync(selectedDestination);
+                if (await _viewModel.MoveSelectedAsync(selectedDestination) &&
+                    _reviewMoveItemId is not null &&
+                    _moveReturnRoute == "review")
+                {
+                    _reviewMoveItemId = null;
+                    _moveReturnRoute = null;
+                    await Shell.Current.GoToAsync("//review");
+                }
             }
         };
 

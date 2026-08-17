@@ -8,4 +8,5 @@ public sealed record CoreKnowledgeState(
     IReadOnlyList<ResourceTopic> ResourceTopics,
     IReadOnlyList<Tag> Tags,
     IReadOnlyList<BrainItem> BrainItems,
-    IReadOnlyList<Journal> Journals);
+    IReadOnlyList<Journal> Journals,
+    IReadOnlyList<ReviewState>? ReviewStates = null);

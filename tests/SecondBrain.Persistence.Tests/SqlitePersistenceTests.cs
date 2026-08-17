@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using SecondBrain.Abstractions.Items;
 using SecondBrain.Abstractions.Modules;
+using SecondBrain.Application.Ports;
 using SecondBrain.Domain.Entities;
 using SecondBrain.Domain.ValueObjects;
 
@@ -38,6 +39,7 @@ public sealed class SqlitePersistenceTests
             Is.EqualTo([
                 "20260724153000_InitialCorePersistence",
                 "20260804090000_AddJournalArchiveState",
+                "20260814120000_AddReviewState",
             ]));
     }
 
@@ -76,6 +78,9 @@ public sealed class SqlitePersistenceTests
                 Has.Count.EqualTo(1));
             Assert.That(loaded.Journals.Single().Entries, Has.Count.EqualTo(1));
             Assert.That(loaded.Journals.Single().IsArchived, Is.True);
+            Assert.That(
+                loaded.ReviewStates?.Single().TargetId,
+                Is.EqualTo(snapshot.Projects.Single().Id.Value));
         });
     }
 
@@ -241,7 +246,12 @@ public sealed class SqlitePersistenceTests
             [topic],
             [rootTag, childTag],
             [note, idea, entry, capture, resource],
-            [journal]);
+            [journal],
+            [new ReviewState(
+                ReviewTargetKind.Project,
+                project.Id.Value,
+                createdAt,
+                createdAt.AddDays(1))]);
     }
 
     private SecondBrainDbContext CreateContext(string path)

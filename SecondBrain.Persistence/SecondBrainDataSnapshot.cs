@@ -8,4 +8,5 @@ public sealed record SecondBrainDataSnapshot(
     IReadOnlyList<ResourceTopic> ResourceTopics,
     IReadOnlyList<Tag> Tags,
     IReadOnlyList<BrainItem> BrainItems,
-    IReadOnlyList<Journal> Journals);
+    IReadOnlyList<Journal> Journals,
+    IReadOnlyList<SecondBrain.Application.Ports.ReviewState>? ReviewStates = null);

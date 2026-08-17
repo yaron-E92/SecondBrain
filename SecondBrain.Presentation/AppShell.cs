@@ -8,7 +8,8 @@ public sealed class AppShell : Shell
         ParaBrowserPage paraBrowserPage,
         CoreSearchPage searchPage,
         JournalBrowserPage journalBrowserPage,
-        CoreEditorPage coreEditorPage)
+        CoreEditorPage coreEditorPage,
+        ReviewPage reviewPage)
     {
         Title = "SecondBrain";
 
@@ -51,6 +52,12 @@ public sealed class AppShell : Shell
                     Route = "editor",
                     Title = "Editor",
                     Content = coreEditorPage
+                },
+                new ShellContent
+                {
+                    Route = "review",
+                    Title = "Review",
+                    Content = reviewPage
                 }
             }
         });

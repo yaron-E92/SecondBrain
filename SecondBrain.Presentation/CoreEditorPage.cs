@@ -863,6 +863,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             "inbox" => "inbox",
             "search" => "search",
             "journals" => "journals",
+            "review" => "review",
             "editor" => "editor",
             _ => "para",
         };
