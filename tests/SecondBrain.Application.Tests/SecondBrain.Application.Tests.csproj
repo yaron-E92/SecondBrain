@@ -44,6 +44,8 @@
              Link="ViewModels\ParaBrowserViewModel.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\ReviewViewModel.cs"
              Link="ViewModels\ReviewViewModel.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ReviewNavigation.cs"
+             Link="Presentation\ReviewNavigation.cs" />
   </ItemGroup>
 
 </Project>
