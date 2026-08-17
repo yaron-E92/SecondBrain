@@ -44,11 +44,13 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
             $"{nameof(viewModel.CurrentItem)}.{nameof(ReviewQueueItem.Details)}");
 
         var open = new Button { Text = "Open item" };
+        open.SetBinding(IsEnabledProperty, nameof(viewModel.CanActOnCurrentItem));
         open.Clicked += async (_, _) => await OpenCurrentAsync();
         var move = new Button { Text = "Move" };
         move.SetBinding(
             IsVisibleProperty,
             nameof(viewModel.CanMoveCurrentItem));
+        move.SetBinding(IsEnabledProperty, nameof(viewModel.CanActOnCurrentItem));
         move.Clicked += async (_, _) => await MoveCurrentAsync();
         var reviewed = new Button { Text = "Mark reviewed" };
         reviewed.SetBinding(
@@ -185,55 +187,24 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
 
     private async Task OpenCurrentAsync()
     {
-        var item = _viewModel.CurrentItem;
-        if (item is null)
+        var target = ReviewNavigation.Open(_viewModel.CurrentItem);
+        if (target is null)
         {
             return;
         }
 
-        if (item.BrainItemId is { } brainItemId)
-        {
-            await Shell.Current.GoToAsync(
-                "//editor",
-                new Dictionary<string, object>
-                {
-                    ["itemId"] = brainItemId.Value.ToString(),
-                    ["returnRoute"] = "review",
-                });
-            return;
-        }
-
-        var contextKind = item.TargetKind switch
-        {
-            ReviewTargetKind.Project => ParaContextKind.Project,
-            ReviewTargetKind.Area => ParaContextKind.Area,
-            _ => throw new InvalidOperationException("Unknown review target."),
-        };
-        await Shell.Current.GoToAsync(
-            "//para",
-            new Dictionary<string, object>
-            {
-                ["contextKind"] = contextKind.ToString(),
-                ["contextId"] = item.TargetId.ToString(),
-                ["returnRoute"] = "review",
-            });
+        await Shell.Current.GoToAsync(target.Route, target.Parameters);
     }
 
     private async Task MoveCurrentAsync()
     {
-        if (_viewModel.CurrentItem?.BrainItemId is not { } brainItemId)
+        var target = ReviewNavigation.Move(_viewModel.CurrentItem);
+        if (target is null)
         {
             return;
         }
 
-        await Shell.Current.GoToAsync(
-            "//para",
-            new Dictionary<string, object>
-            {
-                ["mode"] = "move",
-                ["itemId"] = brainItemId.Value.ToString(),
-                ["returnRoute"] = "review",
-            });
+        await Shell.Current.GoToAsync(target.Route, target.Parameters);
     }
 
     private static Label BoundLabel(
