@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/tests/" />
+  <Project Path="SecondBrain.Abstractions/SecondBrain.Abstractions.csproj" />
+  <Project Path="SecondBrain.Application/SecondBrain.Application.csproj" />
+  <Project Path="SecondBrain.Domain/SecondBrain.Domain.csproj" />
+  <Project Path="SecondBrain.Persistence/SecondBrain.Persistence.csproj" />
+  <Project Path="tests/SecondBrain.Application.Tests/SecondBrain.Application.Tests.csproj" />
+  <Project Path="tests/SecondBrain.Architecture.Tests/SecondBrain.Architecture.Tests.csproj" />
+  <Project Path="tests/SecondBrain.Domain.Tests/SecondBrain.Domain.Tests.csproj" />
+  <Project Path="tests/SecondBrain.Persistence.Tests/SecondBrain.Persistence.Tests.csproj" />
+</Solution>
