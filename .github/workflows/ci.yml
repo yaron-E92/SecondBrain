@@ -19,163 +19,57 @@ concurrency:
 jobs:
   baseline:
     name: Shared workflow policy
-    uses: yaron-E92/AutoDev/.github/workflows/profile-baseline.yml@b6ad247d63901c2177e9b6a036c1e168ea59ab86
+    uses: yaron-E92/AutoDev/.github/workflows/profile-baseline.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       ref: ${{ github.sha }}
       require_concurrency: true
     permissions:
       contents: read
 
-  windows-validation:
-    name: Windows MAUI validation
+  headless-dotnet:
+    name: Headless .NET validation
     needs: [baseline]
-    uses: yaron-E92/AutoDev/.github/workflows/profile-maui.yml@b6ad247d63901c2177e9b6a036c1e168ea59ab86
+    uses: yaron-E92/AutoDev/.github/workflows/profile-dotnet.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
+    with:
+      ref: ${{ github.sha }}
+      global_json_file: global.json
+      restore_command: dotnet restore SecondBrain.Headless.slnx
+      build_command: dotnet build SecondBrain.Headless.slnx --configuration Debug --no-restore
+      test_command: dotnet test SecondBrain.Headless.slnx --configuration Debug --no-build --no-restore --logger "trx"
+      test_results_path: '**/TestResults/*.trx'
+      artifact_name: secondbrain-headless-test-results
+    permissions:
+      contents: read
+
+  maui-validation:
+    name: MAUI product validation
+    needs: [baseline]
+    uses: yaron-E92/AutoDev/.github/workflows/profile-maui.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       ref: ${{ github.sha }}
       global_json_file: global.json
       headless_enabled: false
-      android_enabled: false
+
+      android_enabled: true
+      android_setup_command: dotnet workload install maui-android --skip-manifest-update
+      android_restore_command: dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
+      android_build_command: dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore -f net10.0-android
+      android_test_command: dotnet test SecondBrain.Headless.slnx --configuration Debug --logger "trx"
+      android_test_results_path: '**/TestResults/*.trx'
+      android_runtime_smoke_command: |
+        ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd" \
+        SECOND_BRAIN_AVD_NAME=secondbrain-ci \
+        SECOND_BRAIN_EMULATOR_LOG="$RUNNER_TEMP/android-emulator.log" \
+        scripts/test-linux-android.sh
+      android_runtime_java_distribution: microsoft
+      android_runtime_java_version: '21'
+      android_runtime_timeout_minutes: 45
+
       windows_enabled: true
       windows_setup_command: dotnet workload install maui --skip-manifest-update
-      windows_restore_command: dotnet restore SecondBrain.slnx
-      windows_build_command: dotnet build SecondBrain.slnx --configuration Debug --no-restore
-      windows_test_command: dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore --logger "trx"
+      windows_restore_command: dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
+      windows_build_command: dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore -f net10.0-windows10.0.19041.0
+      windows_test_command: dotnet test SecondBrain.Headless.slnx --configuration Debug --logger "trx"
       windows_test_results_path: '**/TestResults/*.trx'
     permissions:
       contents: read
-
-  linux-android-build-and-smoke-test:
-    name: Linux Android build and smoke test
-    needs: [baseline]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up .NET SDK
-        id: setup-dotnet-linux
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-
-      - name: Cache .NET workloads
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ${{ runner.temp }}/dotnet-workload-cache
-          key: ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-v2-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-dotnet-workloads-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-v2-
-
-      - name: Restore .NET workload files
-        shell: bash
-        run: |
-          workload_cache="$RUNNER_TEMP/dotnet-workload-cache"
-          if [ -d "$workload_cache/packs" ]; then
-            sudo cp -a "$workload_cache/packs/." /usr/share/dotnet/packs/
-          fi
-          if [ -d "$workload_cache/sdk-manifests" ]; then
-            sudo cp -a "$workload_cache/sdk-manifests/." /usr/share/dotnet/sdk-manifests/
-          fi
-          if [ -d "$workload_cache/metadata" ]; then
-            sudo cp -a "$workload_cache/metadata/." /usr/share/dotnet/metadata/
-          fi
-
-      - name: Cache NuGet packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-${{ hashFiles('global.json', '**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-
-
-      - name: Set up JDK
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
-        with:
-          distribution: microsoft
-          java-version: '21'
-
-      - name: Cache Android SDK and emulator
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ${{ runner.temp }}/android-sdk-cache
-          key: ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v2-${{ hashFiles('global.json', 'SecondBrain.Presentation/SecondBrain.Presentation.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-${{ steps.setup-dotnet-linux.outputs.dotnet-version }}-api35-v2-
-
-      - name: Restore Android SDK files
-        shell: bash
-        run: |
-          android_cache="$RUNNER_TEMP/android-sdk-cache"
-          if [ -d "$android_cache" ]; then
-            sudo cp -a "$android_cache/." "$ANDROID_HOME/"
-          fi
-
-      - name: Validate Linux Android scripts
-        shell: bash
-        run: bash -n scripts/test-linux-android.sh scripts/run-linux-android.sh
-
-      - name: Build and run SecondBrain on Android
-        shell: bash
-        env:
-          ANDROID_AVD_HOME: ${{ runner.temp }}/android-avd
-          SECOND_BRAIN_AVD_NAME: secondbrain-ci
-          SECOND_BRAIN_EMULATOR_LOG: ${{ runner.temp }}/android-emulator.log
-        run: scripts/test-linux-android.sh
-
-      - name: Stage .NET workload cache
-        shell: bash
-        run: |
-          workload_cache="$RUNNER_TEMP/dotnet-workload-cache"
-          mkdir -p "$workload_cache/packs" "$workload_cache/sdk-manifests" "$workload_cache/metadata"
-          for pack in /usr/share/dotnet/packs/Microsoft.Android.* /usr/share/dotnet/packs/Microsoft.Maui.*; do
-            if [ -d "$pack" ]; then
-              cp -a "$pack" "$workload_cache/packs/"
-            fi
-          done
-          for feature_band in /usr/share/dotnet/sdk-manifests/*; do
-            for manifest in microsoft.net.sdk.android microsoft.net.sdk.maui; do
-              if [ -d "$feature_band/$manifest" ]; then
-                cached_feature_band="$workload_cache/sdk-manifests/$(basename "$feature_band")"
-                mkdir -p "$cached_feature_band"
-                cp -a "$feature_band/$manifest" "$cached_feature_band/"
-              fi
-            done
-          done
-          if [ -d /usr/share/dotnet/metadata/workloads ]; then
-            cp -a /usr/share/dotnet/metadata/workloads "$workload_cache/metadata/"
-          fi
-
-      - name: Stage Android SDK cache
-        shell: bash
-        run: |
-          android_cache="$RUNNER_TEMP/android-sdk-cache"
-          mkdir -p "$android_cache/system-images/android-35/google_apis"
-          cp -a "$ANDROID_HOME/emulator" "$android_cache/"
-          cp -a "$ANDROID_HOME/platform-tools" "$android_cache/"
-          cp -a "$ANDROID_HOME/system-images/android-35/google_apis/x86_64" \
-            "$android_cache/system-images/android-35/google_apis/"
-
-      - name: Restore dependencies
-        run: dotnet restore SecondBrain.slnx
-
-      - name: Build
-        run: dotnet build SecondBrain.slnx --configuration Debug --no-restore
-
-      - name: Test
-        run: dotnet test SecondBrain.slnx --configuration Debug --no-build --no-restore --logger "trx"
-
-      - name: Upload Linux test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: secondbrain-linux-android-test-results
-          path: '**/TestResults/*.trx'
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Show emulator log on failure
-        if: failure()
-        shell: bash
-        run: cat "$RUNNER_TEMP/android-emulator.log" || true
