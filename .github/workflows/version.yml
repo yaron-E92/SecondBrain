@@ -1,0 +1,40 @@
+name: Version advancement
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  versionIntent:
+    name: Version intent
+    if: github.event_name == 'pull_request'
+    uses: yaron-E92/AutoDev/.github/workflows/version-intent.yml@b6ad247d63901c2177e9b6a036c1e168ea59ab86
+    with:
+      pr_body: ${{ github.event.pull_request.body }}
+      head: ${{ github.sha }}
+    permissions:
+      contents: read
+
+  versionTag:
+    name: Advance trusted version tag
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    uses: yaron-E92/AutoDev/.github/workflows/version-tag.yml@b6ad247d63901c2177e9b6a036c1e168ea59ab86
+    with:
+      head: ${{ github.event.workflow_run.head_sha }}
+      branch: main
+    permissions:
+      contents: write
+      pull-requests: read
