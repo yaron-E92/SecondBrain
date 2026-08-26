@@ -1,5 +1,6 @@
 using SecondBrain.Application.Ports;
 using SecondBrain.Application.UseCases;
+using SecondBrain.Presentation.ViewModels;
 
 namespace SecondBrain.Presentation;
 
