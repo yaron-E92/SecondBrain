@@ -26,7 +26,7 @@ public sealed class NotionExportReaderTests
             Assert.That(export.Tables.Single(table => table.DatabaseName == "Notes" &&
                 table.IsDuplicateAllView).Rows, Has.Count.EqualTo(1));
             Assert.That(export.Tables.Single(table => table.DatabaseName == "Captures")
-                .Rows.Single().Relations, Has.Count.EqualTo(2));
+                .Rows.Single().Relations, Has.Count.EqualTo(3));
             Assert.That(export.ToString(), Does.Not.Contain("Synthetic field notes"));
             Assert.That(export.ToString(), Does.Not.Contain("example.invalid"));
         });
