@@ -12,6 +12,8 @@ public sealed partial class ReviewViewModel : ObservableObject
     private ReviewQueueKind _queueKind = ReviewQueueKind.Inbox;
     private ReviewScopeKind? _scopeKind;
     private Guid? _scopeId;
+    private int _configurationVersion;
+    private int _loadVersion;
 
     public ReviewViewModel(ReviewUseCase useCase)
         : this(useCase, () => DateTimeOffset.UtcNow)
@@ -30,6 +32,10 @@ public sealed partial class ReviewViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsComplete))]
     [NotifyPropertyChangedFor(nameof(HasCurrentItem))]
     [NotifyPropertyChangedFor(nameof(CanMoveCurrentItem))]
+    [NotifyPropertyChangedFor(nameof(CanActOnCurrentItem))]
+    [NotifyCanExecuteChangedFor(nameof(MarkReviewedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeferCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ArchiveCommand))]
     public partial IReadOnlyList<ReviewQueueItem> Items { get; set; } = [];
 
     [ObservableProperty]
@@ -42,10 +48,20 @@ public sealed partial class ReviewViewModel : ObservableObject
     public partial int ChangedCount { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsComplete))]
+    [NotifyPropertyChangedFor(nameof(CanActOnCurrentItem))]
+    [NotifyCanExecuteChangedFor(nameof(MarkReviewedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeferCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ArchiveCommand))]
     public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
+    [NotifyPropertyChangedFor(nameof(IsComplete))]
+    [NotifyPropertyChangedFor(nameof(CanActOnCurrentItem))]
+    [NotifyCanExecuteChangedFor(nameof(MarkReviewedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeferCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ArchiveCommand))]
     public partial string? ErrorMessage { get; set; }
 
     [ObservableProperty]
@@ -63,12 +79,15 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
+    public bool CanActOnCurrentItem => HasCurrentItem && !IsLoading && !HasError;
+
     public void Configure(
         ReviewQueueKind queueKind,
         ReviewScopeKind? scopeKind,
         Guid? scopeId,
         string? returnRoute)
     {
+        _configurationVersion++;
         _queueKind = queueKind;
         _scopeKind = scopeKind;
         _scopeId = scopeId;
@@ -76,25 +95,32 @@ public sealed partial class ReviewViewModel : ObservableObject
             ? "Inbox review"
             : scopeKind is null ? "Due PARA review" : "Workspace review";
         ReturnRoute = NormalizeRoute(returnRoute);
+        Items = [];
         ChangedCount = 0;
+        IsLoading = false;
         StatusMessage = string.Empty;
         ErrorMessage = null;
     }
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
+        var configurationVersion = _configurationVersion;
+        var loadVersion = ++_loadVersion;
+        var query = CurrentQuery();
         IsLoading = true;
         ErrorMessage = null;
+        Items = [];
         try
         {
-            Items = await _useCase.GetQueueAsync(
-                new GetReviewQueueQuery(
-                    _queueKind,
-                    _now(),
-                    _scopeKind,
-                    _scopeId),
-                cancellationToken);
+            var items = await _useCase.GetQueueAsync(query, cancellationToken);
+            if (configurationVersion != _configurationVersion ||
+                loadVersion != _loadVersion)
+            {
+                return;
+            }
+
+            Items = items;
             StatusMessage = Items.Count == 0
                 ? "Review complete."
                 : $"{Items.Count} item{(Items.Count == 1 ? "" : "s")} remaining.";
@@ -104,16 +130,23 @@ public sealed partial class ReviewViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            ErrorMessage = $"Review could not be loaded. {exception.Message}";
+            if (configurationVersion == _configurationVersion &&
+                loadVersion == _loadVersion)
+            {
+                ErrorMessage = $"Review could not be loaded. {exception.Message}";
+            }
         }
         finally
         {
-            IsLoading = false;
-            OnPropertyChanged(nameof(IsComplete));
+            if (configurationVersion == _configurationVersion &&
+                loadVersion == _loadVersion)
+            {
+                IsLoading = false;
+            }
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanMakeDecision))]
     private Task MarkReviewedAsync(CancellationToken cancellationToken) =>
         DecideAsync(
             (item, now) => _useCase.MarkReviewedAsync(
@@ -122,7 +155,7 @@ public sealed partial class ReviewViewModel : ObservableObject
             "Marked reviewed.",
             cancellationToken);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanMakeDecision))]
     private Task DeferAsync(CancellationToken cancellationToken) =>
         DecideAsync(
             (item, now) => _useCase.DeferAsync(
@@ -135,7 +168,7 @@ public sealed partial class ReviewViewModel : ObservableObject
             "Deferred until tomorrow.",
             cancellationToken);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanMakeDecision))]
     private Task ArchiveAsync(CancellationToken cancellationToken) =>
         DecideAsync(
             (item, now) => _useCase.ArchiveAsync(
@@ -155,35 +188,55 @@ public sealed partial class ReviewViewModel : ObservableObject
             return;
         }
 
+        var configurationVersion = _configurationVersion;
+        var query = CurrentQuery();
+        var decisionSaved = false;
         IsLoading = true;
         ErrorMessage = null;
         try
         {
             await decide(current, _now());
+            decisionSaved = true;
+            if (configurationVersion != _configurationVersion)
+            {
+                return;
+            }
+
             ChangedCount++;
             StatusMessage = successMessage;
-            Items = await _useCase.GetQueueAsync(
-                new GetReviewQueueQuery(
-                    _queueKind,
-                    _now(),
-                    _scopeKind,
-                    _scopeId),
-                cancellationToken);
+            Items = [];
+            Items = await _useCase.GetQueueAsync(query, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            if (decisionSaved && configurationVersion == _configurationVersion)
+            {
+                ErrorMessage =
+                    "The decision was saved, but the review queue refresh was canceled. Retry to refresh the queue.";
+            }
         }
         catch (Exception exception)
         {
-            ErrorMessage =
-                $"The decision was not saved. Your place is unchanged. {exception.Message}";
+            if (configurationVersion == _configurationVersion)
+            {
+                ErrorMessage = decisionSaved
+                    ? $"The decision was saved, but the review queue could not be refreshed. Retry to refresh the queue. {exception.Message}"
+                    : $"The decision was not saved. Your place is unchanged. {exception.Message}";
+            }
         }
         finally
         {
-            IsLoading = false;
-            OnPropertyChanged(nameof(IsComplete));
+            if (configurationVersion == _configurationVersion)
+            {
+                IsLoading = false;
+            }
         }
     }
+
+    private bool CanMakeDecision() => CanActOnCurrentItem;
+
+    private GetReviewQueueQuery CurrentQuery() =>
+        new(_queueKind, _now(), _scopeKind, _scopeId);
 
     private static string NormalizeRoute(string? route) =>
         route?.Trim().ToLowerInvariant() switch

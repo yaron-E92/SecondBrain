@@ -158,6 +158,7 @@ public sealed class ParaBrowserViewModelTests
         {
             Assert.That(staleMove, Is.False);
             Assert.That(viewModel.ErrorMessage, Does.Contain("no longer available"));
+            Assert.That(viewModel.SelectedItem?.Id, Is.EqualTo(item.Id));
             Assert.That(
                 item.PrimaryPlacement,
                 Is.EqualTo(PrimaryPlacement.InArea(destination.Id)));
