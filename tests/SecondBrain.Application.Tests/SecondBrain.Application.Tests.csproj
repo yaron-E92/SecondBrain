@@ -34,6 +34,8 @@
              Link="ViewModels\JournalBrowserViewModel.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\NoteEditorSection.cs"
              Link="ViewModels\NoteEditorSection.cs" />
+    <Compile Include="..\..\SecondBrain.Presentation\ViewModels\NotionParityAuditViewModel.cs"
+             Link="ViewModels\NotionParityAuditViewModel.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\ResourceEditorSection.cs"
              Link="ViewModels\ResourceEditorSection.cs" />
     <Compile Include="..\..\SecondBrain.Presentation\ViewModels\DashboardViewModels.cs"

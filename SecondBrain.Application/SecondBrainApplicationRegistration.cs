@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SecondBrain.Application.NotionAudit;
 using SecondBrain.Application.UseCases;
 
 namespace SecondBrain.Application;
@@ -13,6 +14,7 @@ public static class SecondBrainApplicationRegistration
         services.AddSingleton<GetApplicationStatusUseCase>();
         services.AddScoped<CoreKnowledgeUseCases>();
         services.AddScoped<ReviewUseCase>();
+        services.AddScoped<NotionParityAuditUseCase>();
         return services;
     }
 }

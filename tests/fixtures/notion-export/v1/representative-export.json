@@ -210,6 +210,31 @@
           "name": "Synthetic pantry record"
         }
       ]
+    },
+    {
+      "fileName": "Global Tags.csv",
+      "database": "Global Tags",
+      "databaseNotionId": "1000000000000000000000000000000b",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000004",
+          "name": "Synthetic parent tag",
+          "parentNotionId": "30000000000000000000000000000005"
+        }
+      ]
+    },
+    {
+      "fileName": "Archive.csv",
+      "database": "Archive",
+      "databaseNotionId": "1000000000000000000000000000000c",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000005",
+          "name": "Synthetic archived record",
+          "archived": true,
+          "sourceNotionId": "20000000000000000000000000000001"
+        }
+      ]
     }
   ]
 }

@@ -1,7 +1,7 @@
 # Notion export migration mapping, version 1
 
-Status: Approved migration contract  
-Specification version: `1.0`  
+Status: Approved migration contract
+Specification version: `1.0`
 Fixture format version: `1`
 
 This specification defines how a Notion export may be interpreted by a future

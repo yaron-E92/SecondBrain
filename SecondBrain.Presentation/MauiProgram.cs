@@ -1,3 +1,4 @@
+using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
 using SecondBrain.Application;
 using SecondBrain.Application.UseCases;
@@ -12,7 +13,9 @@ public static class MauiProgram
     {
         var builder = MauiApp.CreateBuilder();
 
-        builder.UseMauiApp<App>();
+        builder
+            .UseMauiApp<App>()
+            .UseMauiCommunityToolkit();
         builder.Logging.AddDebug();
 
         var databasePath = Path.Combine(FileSystem.AppDataDirectory, "secondbrain.db");
@@ -26,6 +29,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<CoreEditorViewModel>();
         builder.Services.AddSingleton<JournalBrowserViewModel>();
         builder.Services.AddSingleton<ReviewViewModel>();
+        builder.Services.AddSingleton<NotionParityAuditViewModel>();
         builder.Services.AddSingleton<AppShell>();
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddSingleton<InboxPage>();
@@ -34,6 +38,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<CoreEditorPage>();
         builder.Services.AddSingleton<JournalBrowserPage>();
         builder.Services.AddSingleton<ReviewPage>();
+        builder.Services.AddSingleton<DataImportPage>();
 
         var app = builder.Build();
         app.Services
