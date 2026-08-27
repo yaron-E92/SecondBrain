@@ -51,7 +51,7 @@ jobs:
       headless_enabled: false
 
       android_enabled: true
-      android_setup_command: dotnet workload install maui-android --skip-manifest-update
+      android_setup_command: dotnet workload install maui-android
       android_restore_command: dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
       android_build_command: dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore -f net10.0-android
       android_test_command: dotnet test SecondBrain.Headless.slnx --configuration Debug --logger "trx"
@@ -66,7 +66,7 @@ jobs:
       android_runtime_timeout_minutes: 45
 
       windows_enabled: true
-      windows_setup_command: dotnet workload install maui --skip-manifest-update
+      windows_setup_command: dotnet workload install maui
       windows_restore_command: dotnet restore SecondBrain.Presentation/SecondBrain.Presentation.csproj
       windows_build_command: dotnet build SecondBrain.Presentation/SecondBrain.Presentation.csproj --configuration Debug --no-restore -f net10.0-windows10.0.19041.0
       windows_test_command: dotnet test SecondBrain.Headless.slnx --configuration Debug --logger "trx"
