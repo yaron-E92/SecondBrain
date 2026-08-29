@@ -14,6 +14,7 @@
           "priority": "High",
           "startDate": "2026-01-05",
           "dueDate": "2026-03-31",
+          "areaNotionId": "20000000000000000000000000000002",
           "archived": false
         }
       ]
@@ -26,6 +27,7 @@
         {
           "notionId": "20000000000000000000000000000002",
           "name": "Learning lab",
+          "projectNotionIds": ["20000000000000000000000000000001"],
           "archived": false
         }
       ]
@@ -183,7 +185,8 @@
       "rows": [
         {
           "notionId": "30000000000000000000000000000001",
-          "name": "Synthetic task"
+          "name": "Synthetic task",
+          "projectNotionId": "20000000000000000000000000000001"
         }
       ]
     },
@@ -200,14 +203,39 @@
       ]
     },
     {
-      "fileName": "Pantry.csv",
-      "database": "Pantry",
+      "fileName": "PHOODAB.csv",
+      "database": "PHOODAB",
       "databaseNotionId": "1000000000000000000000000000000a",
       "moduleOwner": "PHOODAB",
       "rows": [
         {
           "notionId": "30000000000000000000000000000003",
           "name": "Synthetic pantry record"
+        }
+      ]
+    },
+    {
+      "fileName": "Global Tags.csv",
+      "database": "Global Tags",
+      "databaseNotionId": "1000000000000000000000000000000b",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000004",
+          "name": "Synthetic parent tag",
+          "parentNotionId": "30000000000000000000000000000005"
+        }
+      ]
+    },
+    {
+      "fileName": "Archive.csv",
+      "database": "Archive",
+      "databaseNotionId": "1000000000000000000000000000000c",
+      "rows": [
+        {
+          "notionId": "30000000000000000000000000000005",
+          "name": "Synthetic archived record",
+          "archived": true,
+          "sourceNotionId": "20000000000000000000000000000001"
         }
       ]
     }

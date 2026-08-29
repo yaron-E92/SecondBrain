@@ -13,7 +13,6 @@
     <NuGetAudit>false</NuGetAudit>
     <SkipValidateMauiImplicitPackageReferences>true</SkipValidateMauiImplicitPackageReferences>
     <BuildInParallel Condition="'$(CODEX_CI)' == '1'">false</BuildInParallel>
-    <RuntimeIdentifier Condition="'$(CODEX_CI)' == '1' and '$(TargetFramework)' == 'net10.0-android'">android-x64</RuntimeIdentifier>
     <ApplicationTitle>SecondBrain</ApplicationTitle>
     <ApplicationId>com.secondbrain.app</ApplicationId>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -27,14 +26,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Maui" Version="[13.0.0]" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SecondBrain.Abstractions\SecondBrain.Abstractions.csproj" />
-    <ProjectReference Include="..\SecondBrain.Application\SecondBrain.Application.csproj" />
-    <ProjectReference Include="..\SecondBrain.Persistence\SecondBrain.Persistence.csproj" />
+    <ProjectReference Include="..\SecondBrain.Abstractions\SecondBrain.Abstractions.csproj" GlobalPropertiesToRemove="RuntimeIdentifier" />
+    <ProjectReference Include="..\SecondBrain.Application\SecondBrain.Application.csproj" GlobalPropertiesToRemove="RuntimeIdentifier" />
+    <ProjectReference Include="..\SecondBrain.Persistence\SecondBrain.Persistence.csproj" GlobalPropertiesToRemove="RuntimeIdentifier" />
   </ItemGroup>
 
 </Project>

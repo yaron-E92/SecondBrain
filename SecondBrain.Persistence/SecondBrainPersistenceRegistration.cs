@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SecondBrain.Application.Ports;
+using SecondBrain.Application.NotionAudit;
 
 namespace SecondBrain.Persistence;
 
@@ -20,6 +21,7 @@ public static class SecondBrainPersistenceRegistration
         services.AddScoped<ICoreKnowledgeRepository>(
             provider => provider.GetRequiredService<SecondBrainDataStore>());
         services.AddScoped<ICoreSearchQueryService, CoreSearchQueryService>();
+        services.AddScoped<INotionExportReader, NotionExportReader>();
         services.AddSingleton<SecondBrainPersistenceInitializer>();
         return services;
     }

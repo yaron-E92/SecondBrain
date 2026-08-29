@@ -9,7 +9,8 @@ public sealed class AppShell : Shell
         CoreSearchPage searchPage,
         JournalBrowserPage journalBrowserPage,
         CoreEditorPage coreEditorPage,
-        ReviewPage reviewPage)
+        ReviewPage reviewPage,
+        DataImportPage dataImportPage)
     {
         Title = "SecondBrain";
 
@@ -58,6 +59,12 @@ public sealed class AppShell : Shell
                     Route = "review",
                     Title = "Review",
                     Content = reviewPage
+                },
+                new ShellContent
+                {
+                    Route = "data-import",
+                    Title = "Data / Import",
+                    Content = dataImportPage
                 }
             }
         });
