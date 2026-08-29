@@ -91,6 +91,31 @@ public sealed class NotionParityAuditUseCaseTests
         });
     }
 
+    [Test]
+    public void Analyze_reports_review_and_unsupported_relationship_targets_as_risks()
+    {
+        var tagId = "20000000000000000000000000000001";
+        var unsupportedId = "20000000000000000000000000000002";
+        var export = new NotionExportMetadata(
+        [
+            Table("Global Tags", "10000000000000000000000000000001", [Row(tagId)]),
+            Table("Unknown graph", "10000000000000000000000000000002", [Row(unsupportedId)]),
+            Table("Projects", "10000000000000000000000000000003",
+                [Row("20000000000000000000000000000003", relations:
+                    [new("Links", [tagId, unsupportedId])])]),
+        ], []);
+
+        var report = new NotionParityAuditUseCase(new UnusedReader()).Analyze(export);
+        var risk = report.Summary.RelationshipRisks.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(risk.PreservationStatus, Is.EqualTo("needs review"));
+            Assert.That(risk.Message, Does.Contain("1 require review"));
+            Assert.That(risk.Message, Does.Contain("1 are unsupported"));
+        });
+    }
+
     private static NotionExportTableMetadata Table(
         string name,
         string databaseId,

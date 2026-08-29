@@ -45,6 +45,8 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var excludedPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ambiguousPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var reviewPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unsupportedPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var classified in classifiedTables)
         {
             if (classified.Status == NotionAuditStatus.ModuleOwnedExcluded)
@@ -60,6 +62,14 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
                         StringComparison.OrdinalIgnoreCase) == true
                         ? classified.Rows.Where(IsAmbiguousResource)
                         : classified.Rows);
+            }
+            else if (classified.Status == NotionAuditStatus.CoreSupportedWithReview)
+            {
+                AddIds(reviewPageIds, classified.Rows);
+            }
+            else if (classified.Status == NotionAuditStatus.Unsupported)
+            {
+                AddIds(unsupportedPageIds, classified.Rows);
             }
         }
 
@@ -97,17 +107,37 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
                 var unresolved = targets.Count(target => !knownPageIds.Contains(target));
                 var excluded = targets.Count(excludedPageIds.Contains);
                 var ambiguous = targets.Count(ambiguousPageIds.Contains);
-                var preservation = unresolved + excluded + ambiguous == 0
-                    ? "will preserve by Notion page ID"
-                    : "needs review";
+                var review = targets.Count(reviewPageIds.Contains);
+                var unsupported = targets.Count(unsupportedPageIds.Contains);
+                var hasTargetRisk = unresolved + excluded + ambiguous + review + unsupported > 0;
+                var sourceNeedsReview = status is NotionAuditStatus.CoreSupportedWithReview or
+                    NotionAuditStatus.Ambiguous;
+                var preservation = status switch
+                {
+                    NotionAuditStatus.ModuleOwnedExcluded => "will be skipped with module-owned source",
+                    NotionAuditStatus.Unsupported => "cannot currently be represented",
+                    _ when hasTargetRisk || sourceNeedsReview => "needs review",
+                    _ => "will preserve by Notion page ID",
+                };
+                var message = status switch
+                {
+                    NotionAuditStatus.ModuleOwnedExcluded =>
+                        "The source is module-owned or excluded from Core; no relationship will be imported.",
+                    NotionAuditStatus.Unsupported =>
+                        "The source cannot currently be represented in Core; no relationship will be imported.",
+                    _ when !hasTargetRisk && sourceNeedsReview =>
+                        "Targets are present, but the source mapping requires review before this relation can be preserved.",
+                    _ when !hasTargetRisk =>
+                        "Targets are present and eligible; relation type will be retained.",
+                    _ =>
+                        $"{unresolved} target(s) are missing, {excluded} are module-owned/excluded, {ambiguous} are ambiguous, {review} require review, and {unsupported} are unsupported. No placeholder will be created.",
+                };
                 risks.Add(new NotionRelationshipRisk(
                     name ?? "Unidentified database",
                     relationGroup.Key,
                     preservation,
                     targets.Length,
-                    unresolved + excluded + ambiguous == 0
-                        ? "Targets are present and eligible; relation type will be retained."
-                        : $"{unresolved} target(s) are missing, {excluded} are module-owned/excluded, and {ambiguous} are ambiguous. No placeholder will be created."));
+                    message));
             }
         }
 
@@ -118,7 +148,7 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
             sections.Where(section => section.Status is NotionAuditStatus.CoreSupportedWithReview or NotionAuditStatus.Ambiguous).Sum(section => section.RowCount),
             sections.Where(section => section.Status == NotionAuditStatus.ModuleOwnedExcluded).Sum(section => section.RowCount),
             sections.Where(section => section.Status == NotionAuditStatus.Unsupported).Sum(section => section.RowCount),
-            export.Tables.Where(table => table.IsDuplicateAllView).Sum(table => table.Rows.Count),
+            export.Tables.Where(table => table.IsDuplicateAllView).Sum(table => EffectiveRows(table.Rows).Count),
             sections,
             risks,
             diagnostics);

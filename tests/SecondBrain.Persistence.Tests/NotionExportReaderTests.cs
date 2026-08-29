@@ -97,6 +97,72 @@ public sealed class NotionExportReaderTests
         }
     }
 
+    [Test]
+    public async Task Reader_normalizes_hyphenated_ids_and_redacts_non_id_relationship_values()
+    {
+        const string manifest = """
+            {
+              "files": [
+                {
+                  "fileName": "Notes.csv",
+                  "database": "Notes",
+                  "databaseNotionId": "10000000-0000-0000-0000-000000000001",
+                  "rows": [
+                    {
+                      "notionId": "20000000-0000-0000-0000-000000000001",
+                      "tags": ["Private label"],
+                      "primaryNotionId": "20000000-0000-0000-0000-000000000002"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"notion-export-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(path, manifest);
+
+            var export = await new NotionExportReader().ReadAsync(path);
+            var table = export.Tables.Single();
+            var row = table.Rows.Single();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(table.DatabaseNotionId, Is.EqualTo("10000000000000000000000000000001"));
+                Assert.That(row.NotionId, Is.EqualTo("20000000000000000000000000000001"));
+                Assert.That(row.Relations.Single(relation => relation.FieldName == "primaryNotionId")
+                    .TargetNotionIds.Single(), Is.EqualTo("20000000000000000000000000000002"));
+                Assert.That(row.Relations.Single(relation => relation.FieldName == "tags")
+                    .TargetNotionIds.Single(), Is.EqualTo("unresolved-export-relation"));
+                Assert.That(export.ToString(), Does.Not.Contain("Private label"));
+            });
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
+    public void Reader_rejects_unterminated_csv_fields()
+    {
+        var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"notion-export-{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(path, "Name,Notion ID\n\"unfinished,20000000000000000000000000000001");
+
+            var exception = Assert.ThrowsAsync<InvalidDataException>(
+                async () => await new NotionExportReader().ReadAsync(path));
+
+            Assert.That(exception!.Message, Does.Contain("unterminated quoted field"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static Task WriteCsvAsync(string exportPath, string databaseName, int databaseId, string content) =>
         File.WriteAllTextAsync(
             Path.Combine(exportPath, $"{databaseName} {databaseId:x32}.csv"),

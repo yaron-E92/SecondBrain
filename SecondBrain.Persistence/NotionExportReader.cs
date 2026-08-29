@@ -162,7 +162,7 @@ public sealed class NotionExportReader : INotionExportReader
                     }
 
                     rows.Add(new NotionExportRowMetadata(
-                        OptionalString(row, "notionId"),
+                        NormalizeOptionalNotionId(OptionalString(row, "notionId")),
                         OptionalString(row, "classification"),
                         OptionalBoolean(row, "isTemplate"),
                         OptionalBoolean(row, "archived"),
@@ -173,7 +173,7 @@ public sealed class NotionExportReader : INotionExportReader
             tables.Add(new NotionExportTableMetadata(
                 fileName,
                 OptionalString(file, "database"),
-                OptionalString(file, "databaseNotionId"),
+                NormalizeOptionalNotionId(OptionalString(file, "databaseNotionId")),
                 Path.GetFileNameWithoutExtension(fileName)
                     .EndsWith("_all", StringComparison.OrdinalIgnoreCase),
                 fields.ToArray(),
@@ -215,7 +215,7 @@ public sealed class NotionExportReader : INotionExportReader
                 values.TryGetValue("Notion ID", out var notionId);
                 values.TryGetValue("Classification", out var classification);
                 return new NotionExportRowMetadata(
-                    notionId,
+                    NormalizeOptionalNotionId(notionId),
                     classification,
                     values.TryGetValue("Is template", out var template) && bool.TryParse(template, out var isTemplate) && isTemplate,
                     values.TryGetValue("Archived", out var archived) && bool.TryParse(archived, out var isArchived) && isArchived,
@@ -266,17 +266,27 @@ public sealed class NotionExportReader : INotionExportReader
         return new NotionExportRelation(fieldName, targets);
     }
 
-    private static IReadOnlyList<string> RelationshipTargets(JsonElement value) => value.ValueKind switch
+    private static IReadOnlyList<string> RelationshipTargets(JsonElement value)
     {
-        JsonValueKind.String => value.GetString()!
-            .Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
-        JsonValueKind.Array => value.EnumerateArray()
-            .Where(item => item.ValueKind == JsonValueKind.String)
-            .Select(item => item.GetString()!)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToArray(),
-        _ => [],
-    };
+        var references = value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString()!
+                .Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+            JsonValueKind.Array => value.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString()!)
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .ToArray(),
+            _ => [],
+        };
+        return references
+            .SelectMany(reference => NotionIdPattern.Matches(reference)
+                .Select(match => NormalizeNotionId(match.Value)))
+            .Concat(references
+                .Where(reference => !NotionIdPattern.IsMatch(reference))
+                .Select(_ => UnresolvedRelationTarget))
+            .ToArray();
+    }
 
     private static bool IsDuplicateAllView(string sourceName) =>
         HasDuplicateViewSuffix(RemoveTrailingNotionId(Path.GetFileNameWithoutExtension(sourceName)));
@@ -317,6 +327,9 @@ public sealed class NotionExportReader : INotionExportReader
     }
 
     private static string NormalizeNotionId(string value) => value.Replace("-", string.Empty, StringComparison.Ordinal);
+
+    private static string? NormalizeOptionalNotionId(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : NormalizeNotionId(value);
 
     private static IReadOnlyList<string> CsvDiagnostics(IEnumerable<NotionExportTableMetadata> tables)
     {
@@ -368,6 +381,11 @@ public sealed class NotionExportReader : INotionExportReader
             {
                 field.Append(character);
             }
+        }
+
+        if (quoted)
+        {
+            throw new InvalidDataException("The selected export contains malformed CSV with an unterminated quoted field.");
         }
 
         if (field.Length > 0 || record.Count > 0)
