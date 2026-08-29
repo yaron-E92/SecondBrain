@@ -14,6 +14,7 @@
           "priority": "High",
           "startDate": "2026-01-05",
           "dueDate": "2026-03-31",
+          "areaNotionId": "20000000000000000000000000000002",
           "archived": false
         }
       ]
@@ -26,6 +27,7 @@
         {
           "notionId": "20000000000000000000000000000002",
           "name": "Learning lab",
+          "projectNotionIds": ["20000000000000000000000000000001"],
           "archived": false
         }
       ]
@@ -183,7 +185,8 @@
       "rows": [
         {
           "notionId": "30000000000000000000000000000001",
-          "name": "Synthetic task"
+          "name": "Synthetic task",
+          "projectNotionId": "20000000000000000000000000000001"
         }
       ]
     },
@@ -200,8 +203,8 @@
       ]
     },
     {
-      "fileName": "Pantry.csv",
-      "database": "Pantry",
+      "fileName": "PHOODAB.csv",
+      "database": "PHOODAB",
       "databaseNotionId": "1000000000000000000000000000000a",
       "moduleOwner": "PHOODAB",
       "rows": [

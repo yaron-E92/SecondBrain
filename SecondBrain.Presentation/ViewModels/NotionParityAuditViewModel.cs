@@ -35,8 +35,9 @@ public sealed partial class NotionParityAuditViewModel(
     {
         _scanCancellation?.Cancel();
         _scanCancellation?.Dispose();
-        _scanCancellation = new CancellationTokenSource();
-        var cancellationToken = _scanCancellation.Token;
+        var scanCancellation = new CancellationTokenSource();
+        _scanCancellation = scanCancellation;
+        var cancellationToken = scanCancellation.Token;
         IsScanning = true;
         ErrorMessage = null;
         StatusMessage = "Scanning locally… No application data is being changed.";
@@ -44,28 +45,45 @@ public sealed partial class NotionParityAuditViewModel(
         {
             var report = await auditUseCase.AuditAsync(sourcePath, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            Report = report;
-            StatusMessage = "Audit complete. Review every warning before importing.";
+            if (ReferenceEquals(_scanCancellation, scanCancellation))
+            {
+                Report = report;
+                StatusMessage = "Audit complete. Review every warning before importing.";
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            StatusMessage = Report is null
-                ? "Scan canceled. No application data was changed."
-                : "Replacement scan canceled. The previous report is still available.";
+            if (ReferenceEquals(_scanCancellation, scanCancellation))
+            {
+                StatusMessage = Report is null
+                    ? "Scan canceled. No application data was changed."
+                    : "Replacement scan canceled. The previous report is still available.";
+            }
         }
         catch (UnauthorizedAccessException)
         {
-            ErrorMessage = "SecondBrain cannot read that export. Grant file access or choose another source, then retry.";
-            StatusMessage = "Audit failed safely. No application data was changed.";
+            if (ReferenceEquals(_scanCancellation, scanCancellation))
+            {
+                ErrorMessage = "SecondBrain cannot read that export. Grant file access or choose another source, then retry.";
+                StatusMessage = "Audit failed safely. No application data was changed.";
+            }
         }
         catch (Exception exception) when (exception is IOException or JsonException or NotSupportedException)
         {
-            ErrorMessage = $"That export could not be audited. {exception.Message} Choose a supported folder, ZIP, JSON manifest, or CSV and retry.";
-            StatusMessage = "Audit failed safely. No application data was changed.";
+            if (ReferenceEquals(_scanCancellation, scanCancellation))
+            {
+                ErrorMessage = $"That export could not be audited. {exception.Message} Choose a supported folder, ZIP, JSON manifest, or CSV and retry.";
+                StatusMessage = "Audit failed safely. No application data was changed.";
+            }
         }
         finally
         {
-            IsScanning = false;
+            if (ReferenceEquals(_scanCancellation, scanCancellation))
+            {
+                IsScanning = false;
+                _scanCancellation = null;
+                scanCancellation.Dispose();
+            }
         }
     }
 

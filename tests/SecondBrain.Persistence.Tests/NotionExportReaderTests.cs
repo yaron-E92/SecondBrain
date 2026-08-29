@@ -17,6 +17,7 @@ public sealed class NotionExportReaderTests
             "tests", "fixtures", "notion-export", "v1", "representative-export.json");
 
         var export = await new NotionExportReader().ReadAsync(path);
+        var report = new NotionParityAuditUseCase(new NotionExportReader()).Analyze(export);
 
         Assert.Multiple(() =>
         {
@@ -27,8 +28,34 @@ public sealed class NotionExportReaderTests
                 table.IsDuplicateAllView).Rows, Has.Count.EqualTo(1));
             Assert.That(export.Tables.Single(table => table.DatabaseName == "Captures")
                 .Rows.Single().Relations, Has.Count.EqualTo(3));
+            Assert.That(report.Summary.Sections.Select(section => section.Name),
+                Does.Contain("Projects").And.Contain("Areas").And.Contain("Resources")
+                    .And.Contain("Global Tags").And.Contain("Notes").And.Contain("Captures")
+                    .And.Contain("Ideas").And.Contain("Tasks").And.Contain("Chores")
+                    .And.Contain("PHOODAB").And.Contain("Archive"));
+            Assert.That(report.Summary.Sections.Single(section => section.Name == "Projects").Status,
+                Is.EqualTo(NotionAuditStatus.CoreSupported));
+            Assert.That(report.Summary.Sections.Single(section => section.Name == "Resources").Status,
+                Is.EqualTo(NotionAuditStatus.Ambiguous));
+            Assert.That(report.Summary.Sections.Where(section =>
+                    section.Name is "Tasks" or "Chores" or "PHOODAB").Select(section => section.Status),
+                Has.All.EqualTo(NotionAuditStatus.ModuleOwnedExcluded));
+            Assert.That(report.Summary.Sections.Single(section => section.Name == "Archive").Status,
+                Is.EqualTo(NotionAuditStatus.CoreSupportedWithReview));
+            Assert.That(report.Summary.Sections.Single(section =>
+                    section.Name == "Notes" && section.Status == NotionAuditStatus.DuplicateView).RowCount,
+                Is.Zero);
+            Assert.That(report.Summary.DuplicateRowsIgnored, Is.EqualTo(1));
+            Assert.That(report.Summary.RelationshipRisks.Select(risk => $"{risk.Source}.{risk.Field}"),
+                Does.Contain("Projects.areaNotionId").And.Contain("Areas.projectNotionIds")
+                    .And.Contain("Resources.primaryNotionId").And.Contain("Global Tags.parentNotionId")
+                    .And.Contain("Tasks.projectNotionId").And.Contain("Archive.sourceNotionId"));
+            Assert.That(report.Summary.RelationshipRisks, Has.Some.Property("PreservationStatus")
+                .EqualTo("needs review"));
             Assert.That(export.ToString(), Does.Not.Contain("Synthetic field notes"));
             Assert.That(export.ToString(), Does.Not.Contain("example.invalid"));
+            Assert.That(report.MachineReadableSummary, Does.Not.Contain("Synthetic field notes"));
+            Assert.That(report.MachineReadableSummary, Does.Not.Contain("example.invalid"));
         });
     }
 
