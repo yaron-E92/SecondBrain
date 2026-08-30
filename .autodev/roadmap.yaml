@@ -1,0 +1,58 @@
+version: 1
+priority:
+  # Journey 1: bring existing knowledge home safely.
+  - issue: 102
+  - issue: 43
+
+  # Journey 2: understand, enable, persist, and revoke optional modules safely.
+  - issue: 45
+  - issue: 46
+  - issue: 47
+  - issue: 48
+
+  # Journey 3: protect the user's Core knowledge before expanding integrations.
+  - issue: 68
+  - issue: 69
+  - issue: 70
+
+  # Journey 4: opt into ShuffleTask, see useful work, open it, and return.
+  - issue: 49
+  - issue: 114
+  - issue: 91
+  - issue: 50
+  - issue: 51
+  - issue: 52
+  - issue: 53
+
+  # Journey 5: search Core and enabled modules with safe degradation.
+  - issue: 54
+  - issue: 55
+  - issue: 56
+  - issue: 57
+  - issue: 58
+
+  # Journey 6: find PHOODAB-owned information and preview replenishment safely.
+  - issue: 59
+  - issue: 60
+  - issue: 61
+  - issue: 62
+  - issue: 63
+
+  # Journey 7: confirm real cross-module actions, reminders, retries, and failures.
+  - issue: 64
+  - issue: 65
+  - issue: 66
+  - issue: 67
+
+  # Journey 8: ask private cited questions and explicitly confirm any action.
+  - issue: 71
+  - issue: 72
+  - issue: 73
+  - issue: 74
+  - issue: 75
+  - issue: 76
+
+  # Journey 9: publish a verifiable installable release once higher-value work is unavailable or complete.
+  - issue: 111
+
+fallback: oldest
