@@ -116,6 +116,36 @@ public sealed class NotionParityAuditUseCaseTests
         });
     }
 
+    [Test]
+    public void Analyze_defers_conflicting_duplicate_page_ids_and_marks_links_for_review()
+    {
+        var repeatedId = "20000000000000000000000000000001";
+        var export = new NotionExportMetadata(
+        [
+            Table("Notes", "10000000000000000000000000000001",
+            [
+                Row(repeatedId) with { ContentFingerprint = "FIRST" },
+                Row(repeatedId) with { ContentFingerprint = "SECOND" },
+            ]),
+            Table("Projects", "10000000000000000000000000000002",
+                [Row("20000000000000000000000000000002", relations:
+                    [new("Links", [repeatedId])])]),
+        ], []);
+
+        var report = new NotionParityAuditUseCase(new UnusedReader()).Analyze(export);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(report.Summary.Sections.Single(section => section.Name == "Notes").Status,
+                Is.EqualTo(NotionAuditStatus.CoreSupportedWithReview));
+            Assert.That(report.Summary.WillImport, Is.EqualTo(1));
+            Assert.That(report.Summary.NeedsReview, Is.EqualTo(1));
+            Assert.That(report.Summary.Diagnostics.Single(), Does.Contain("conflicting rows require review"));
+            Assert.That(report.Summary.RelationshipRisks.Single().PreservationStatus,
+                Is.EqualTo("needs review"));
+        });
+    }
+
     private static NotionExportTableMetadata Table(
         string name,
         string databaseId,

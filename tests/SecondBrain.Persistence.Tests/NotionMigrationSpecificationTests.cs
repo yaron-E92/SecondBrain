@@ -60,6 +60,8 @@ public sealed partial class NotionMigrationSpecificationTests
             Assert.That(mapping, Does.Contain("module-owned-shuffletask"));
             Assert.That(mapping, Does.Contain("module-owned-phoodab"));
             Assert.That(mapping, Does.Contain("Notion page ID"));
+            Assert.That(mapping, Does.Contain("classification hint"));
+            Assert.That(mapping, Does.Contain("remains ambiguous"));
         });
     }
 

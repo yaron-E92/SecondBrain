@@ -32,10 +32,18 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
         var sections = new List<NotionAuditSection>();
         var risks = new List<NotionRelationshipRisk>();
         var diagnostics = new List<string>(export.Diagnostics);
+        var conflictingPageIds = FindConflictingPageIds(export, diagnostics);
         var classifiedTables = export.Tables.Select(table =>
         {
             var rows = EffectiveRows(table.Rows);
-            return (Table: table, Rows: rows, Status: Classify(table, table.DatabaseName?.Trim(), rows));
+            var status = Classify(table, table.DatabaseName?.Trim(), rows);
+            if (status == NotionAuditStatus.CoreSupported && rows.Any(row =>
+                    row.NotionId is not null && conflictingPageIds.Contains(row.NotionId)))
+            {
+                status = NotionAuditStatus.CoreSupportedWithReview;
+            }
+
+            return (Table: table, Rows: rows, Status: status);
         }).ToArray();
         var knownPageIds = export.Tables
             .Where(table => !table.IsDuplicateAllView)
@@ -46,6 +54,7 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
         var excludedPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ambiguousPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var reviewPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        reviewPageIds.UnionWith(conflictingPageIds);
         var unsupportedPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var classified in classifiedTables)
         {
@@ -141,7 +150,6 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
             }
         }
 
-        DetectConflictingIds(export, diagnostics);
         var summary = new NotionAuditSummary(
             "1.0",
             sections.Where(section => section.Status == NotionAuditStatus.CoreSupported).Sum(section => section.RowCount),
@@ -168,7 +176,7 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
             return NotionAuditStatus.DuplicateView;
         }
 
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(table.DatabaseNotionId))
+        if (string.IsNullOrWhiteSpace(name))
         {
             return NotionAuditStatus.Ambiguous;
         }
@@ -176,6 +184,11 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
         if (ShuffleTask.Contains(name) || Phoodab.Contains(name))
         {
             return NotionAuditStatus.ModuleOwnedExcluded;
+        }
+
+        if (string.IsNullOrWhiteSpace(table.DatabaseNotionId))
+        {
+            return NotionAuditStatus.Ambiguous;
         }
 
         if (name.Equals("Archive", StringComparison.OrdinalIgnoreCase) ||
@@ -276,18 +289,26 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
         return result;
     }
 
-    private static void DetectConflictingIds(NotionExportMetadata export, List<string> diagnostics)
+    private static HashSet<string> FindConflictingPageIds(
+        NotionExportMetadata export,
+        List<string> diagnostics)
     {
-        foreach (var group in export.Tables
+        var conflicts = export.Tables
             .Where(table => !table.IsDuplicateAllView)
             .SelectMany(table => table.Rows.Select(row => (table.SourceName, Row: row)))
             .Where(item => !string.IsNullOrWhiteSpace(item.Row.NotionId))
             .GroupBy(item => item.Row.NotionId!, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Select(item => RowSignature(item.Row))
-                .Distinct(StringComparer.Ordinal).Count() > 1))
+                .Distinct(StringComparer.Ordinal).Count() > 1)
+            .ToArray();
+        foreach (var group in conflicts)
         {
             diagnostics.Add($"A repeated Notion page ID appears in {group.Select(item => item.SourceName).Distinct().Count()} source file(s); conflicting rows require review.");
         }
+
+        return conflicts
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private static string RowSignature(NotionExportRowMetadata row) =>
@@ -296,6 +317,7 @@ public sealed class NotionParityAuditUseCase(INotionExportReader reader)
             row.Classification ?? string.Empty,
             row.IsTemplate,
             row.IsArchived,
+            row.ContentFingerprint ?? string.Empty,
             string.Join(
                 ";",
                 row.Relations

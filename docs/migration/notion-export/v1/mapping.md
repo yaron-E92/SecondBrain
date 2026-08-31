@@ -18,6 +18,12 @@ Notion views, not additional databases. Ignore template rows identified by an
 
 Use the Notion database ID and page ID from export metadata as source identity.
 Never infer identity from a directory name, CSV filename, title, or row number.
+An audit may use a CSV filename only as a non-authoritative database
+classification hint so the report can describe the apparent section. A
+filename-only Core classification remains ambiguous until authoritative export
+metadata supplies its database identity. A recognizable Tasks, Chores, or
+PHOODAB filename hint may still be conservatively marked module-owned/excluded;
+it must never be promoted into Core content.
 For every imported record, retain this provenance:
 
 - source system: `notion`;
