@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -36,14 +37,19 @@ public sealed class NotionExportReader : INotionExportReader
         }
 
         await using var stream = File.OpenRead(sourcePath);
-        return extension.Equals(".json", StringComparison.OrdinalIgnoreCase)
-            ? await ReadManifestAsync(stream, cancellationToken)
-            : extension.Equals(".csv", StringComparison.OrdinalIgnoreCase)
-                ? new NotionExportMetadata(
-                    [await ReadCsvAsync(Path.GetFileName(sourcePath), stream, cancellationToken)],
-                    CsvDiagnostics([ParseDatabaseIdentity(Path.GetFileName(sourcePath))]))
-                : throw new NotSupportedException(
-                    "Choose a Notion export folder, .zip archive, synthetic manifest, or CSV file.");
+        if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            return await ReadManifestAsync(stream, cancellationToken);
+        }
+
+        if (extension.Equals(".csv", StringComparison.OrdinalIgnoreCase))
+        {
+            var table = await ReadCsvAsync(Path.GetFileName(sourcePath), stream, cancellationToken);
+            return new NotionExportMetadata([table], CsvDiagnostics([table]));
+        }
+
+        throw new NotSupportedException(
+            "Choose a Notion export folder, .zip archive, synthetic manifest, or CSV file.");
     }
 
     private static async Task<NotionExportMetadata> ReadDirectoryAsync(
@@ -166,7 +172,10 @@ public sealed class NotionExportReader : INotionExportReader
                         OptionalString(row, "classification"),
                         OptionalBoolean(row, "isTemplate"),
                         OptionalBoolean(row, "archived"),
-                        relations));
+                        relations)
+                    {
+                        ContentFingerprint = Fingerprint(row.GetRawText())
+                    });
                 }
             }
 
@@ -189,13 +198,13 @@ public sealed class NotionExportReader : INotionExportReader
         CancellationToken cancellationToken)
     {
         var isDuplicateAllView = IsDuplicateAllView(sourceName);
-        var identity = ParseDatabaseIdentity(sourceName);
+        var databaseNameHint = ParseDatabaseClassificationHint(sourceName);
         using var reader = new StreamReader(stream, Encoding.UTF8, true, leaveOpen: true);
         var text = await reader.ReadToEndAsync(cancellationToken);
         var records = ParseCsv(text);
         if (records.Count == 0)
         {
-            return new NotionExportTableMetadata(sourceName, identity.DatabaseName, identity.DatabaseNotionId,
+            return new NotionExportTableMetadata(sourceName, databaseNameHint, null,
                 isDuplicateAllView,
                 [], []);
         }
@@ -219,13 +228,16 @@ public sealed class NotionExportReader : INotionExportReader
                     classification,
                     values.TryGetValue("Is template", out var template) && bool.TryParse(template, out var isTemplate) && isTemplate,
                     values.TryGetValue("Archived", out var archived) && bool.TryParse(archived, out var isArchived) && isArchived,
-                    relations);
+                    relations)
+                {
+                    ContentFingerprint = FingerprintCsvRow(headers, record)
+                };
             })
             .ToArray();
         return new NotionExportTableMetadata(
             sourceName,
-            identity.DatabaseName,
-            identity.DatabaseNotionId,
+            databaseNameHint,
+            null,
             isDuplicateAllView,
             headers,
             rows);
@@ -294,7 +306,7 @@ public sealed class NotionExportReader : INotionExportReader
     private static bool HasDuplicateViewSuffix(string value) =>
         value.EndsWith("_all", StringComparison.OrdinalIgnoreCase);
 
-    private static NotionExportTableMetadata ParseDatabaseIdentity(string sourceName)
+    private static string? ParseDatabaseClassificationHint(string sourceName)
     {
         var stem = Uri.UnescapeDataString(Path.GetFileNameWithoutExtension(sourceName)).Trim();
         var match = NotionIdPattern.Matches(stem)
@@ -303,7 +315,6 @@ public sealed class NotionExportReader : INotionExportReader
                 var suffix = stem[(candidate.Index + candidate.Length)..].Trim();
                 return suffix.Length == 0 || HasDuplicateViewSuffix(suffix);
             });
-        var databaseId = match is not null ? NormalizeNotionId(match.Value) : null;
         var name = match is not null ? stem.Remove(match.Index, match.Length).Trim() : stem;
         name = name.TrimEnd();
         if (HasDuplicateViewSuffix(name))
@@ -311,11 +322,7 @@ public sealed class NotionExportReader : INotionExportReader
             name = name[..^4].TrimEnd();
         }
 
-        return new NotionExportTableMetadata(sourceName,
-            string.IsNullOrWhiteSpace(name) ? null : name,
-            databaseId,
-            IsDuplicateAllView(sourceName),
-            [], []);
+        return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 
     private static string RemoveTrailingNotionId(string value)
@@ -336,8 +343,22 @@ public sealed class NotionExportReader : INotionExportReader
         var unidentified = tables.Count(table => string.IsNullOrWhiteSpace(table.DatabaseNotionId));
         return unidentified == 0
             ? []
-            : [$"{unidentified} CSV table(s) do not contain a Notion database ID in the export filename and remain ambiguous."];
+            : [$"{unidentified} CSV table(s) lack authoritative Notion database identity metadata and remain ambiguous; filenames are classification hints only."];
     }
+
+    private static string FingerprintCsvRow(
+        IReadOnlyList<string> headers,
+        IReadOnlyList<string> record)
+    {
+        var canonical = string.Join(
+            '\u001e',
+            headers.Select((header, index) =>
+                $"{header}\u001f{(index < record.Count ? record[index] : string.Empty)}"));
+        return Fingerprint(canonical);
+    }
+
+    private static string Fingerprint(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private static List<List<string>> ParseCsv(string text)
     {

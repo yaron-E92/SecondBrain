@@ -19,7 +19,10 @@ public sealed record NotionExportRowMetadata(
     string? Classification,
     bool IsTemplate,
     bool IsArchived,
-    IReadOnlyList<NotionExportRelation> Relations);
+    IReadOnlyList<NotionExportRelation> Relations)
+{
+    public string? ContentFingerprint { get; init; }
+}
 
 public sealed record NotionExportTableMetadata(
     string SourceName,
@@ -38,6 +41,13 @@ public interface INotionExportReader
     Task<NotionExportMetadata> ReadAsync(
         string sourcePath,
         CancellationToken cancellationToken = default);
+}
+
+public interface INotionExportSourcePicker
+{
+    Task<string?> PickFolderAsync(CancellationToken cancellationToken = default);
+
+    Task<string?> PickArchiveAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed record NotionAuditSection(

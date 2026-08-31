@@ -98,13 +98,15 @@ public sealed class NotionExportReaderTests
 
             Assert.Multiple(() =>
             {
-                Assert.That(export.Diagnostics, Is.Empty);
+                Assert.That(export.Diagnostics, Has.Count.EqualTo(1));
+                Assert.That(export.Diagnostics.Single(), Does.Contain("filenames are classification hints only"));
+                Assert.That(export.Tables.Select(table => table.DatabaseNotionId), Has.All.Null);
                 Assert.That(export.Tables.Select(table => table.DatabaseName),
                     Does.Contain("Projects").And.Contain("Areas").And.Contain("Resources")
                         .And.Contain("Global Tags").And.Contain("Tasks").And.Contain("Chores")
                         .And.Contain("PHOODAB").And.Contain("Archive").And.Contain("Notes"));
                 Assert.That(report.Summary.Sections.Single(section => section.Name == "Projects").Status,
-                    Is.EqualTo(NotionAuditStatus.CoreSupported));
+                    Is.EqualTo(NotionAuditStatus.Ambiguous));
                 Assert.That(report.Summary.Sections.Single(section => section.Name == "Tasks").Status,
                     Is.EqualTo(NotionAuditStatus.ModuleOwnedExcluded));
                 Assert.That(report.Summary.Sections.Single(section => section.Name == "PHOODAB").Status,
@@ -121,6 +123,92 @@ public sealed class NotionExportReaderTests
         finally
         {
             Directory.Delete(testPath, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Reader_never_uses_csv_filename_ids_as_database_identity()
+    {
+        var testPath = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            $"notion-export-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(testPath);
+        try
+        {
+            await WriteCsvAsync(testPath, "Projects", 1, "Name\nSynthetic project\n");
+            await WriteCsvAsync(testPath, "Projects", 2, "Name\nSynthetic project\n");
+
+            var export = await new NotionExportReader().ReadAsync(testPath);
+            var report = new NotionParityAuditUseCase(new NotionExportReader()).Analyze(export);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(export.Tables, Has.Count.EqualTo(2));
+                Assert.That(export.Tables.Select(table => table.DatabaseName),
+                    Has.All.EqualTo("Projects"));
+                Assert.That(export.Tables.Select(table => table.DatabaseNotionId), Has.All.Null);
+                Assert.That(report.Summary.Sections.Select(section => section.Status),
+                    Has.All.EqualTo(NotionAuditStatus.Ambiguous));
+            });
+        }
+        finally
+        {
+            Directory.Delete(testPath, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Reader_fingerprints_private_row_content_without_retaining_it()
+    {
+        const string manifest = """
+            {
+              "files": [
+                {
+                  "fileName": "Notes.csv",
+                  "database": "Notes",
+                  "databaseNotionId": "10000000000000000000000000000001",
+                  "rows": [
+                    {
+                      "notionId": "20000000000000000000000000000001",
+                      "name": "First private title"
+                    },
+                    {
+                      "notionId": "20000000000000000000000000000001",
+                      "name": "Second private title"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"notion-export-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(path, manifest);
+
+            var reader = new NotionExportReader();
+            var export = await reader.ReadAsync(path);
+            var report = new NotionParityAuditUseCase(reader).Analyze(export);
+
+            Assert.Multiple(() =>
+            {
+                var fingerprints = export.Tables.Single().Rows
+                    .Select(row => row.ContentFingerprint)
+                    .ToArray();
+                Assert.That(fingerprints, Has.All.Not.Null);
+                Assert.That(fingerprints, Is.Unique);
+                Assert.That(export.ToString(), Does.Not.Contain("First private title"));
+                Assert.That(export.ToString(), Does.Not.Contain("Second private title"));
+                Assert.That(report.Summary.WillImport, Is.Zero);
+                Assert.That(report.Summary.NeedsReview, Is.EqualTo(1));
+                Assert.That(report.Summary.Diagnostics.Single(), Does.Contain("conflicting rows require review"));
+                Assert.That(report.MachineReadableSummary, Does.Not.Contain("First private title"));
+                Assert.That(report.MachineReadableSummary, Does.Not.Contain("Second private title"));
+            });
+        }
+        finally
+        {
+            File.Delete(path);
         }
     }
 

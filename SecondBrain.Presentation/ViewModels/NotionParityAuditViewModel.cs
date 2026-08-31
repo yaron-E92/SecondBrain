@@ -5,7 +5,8 @@ using System.Text.Json;
 namespace SecondBrain.Presentation.ViewModels;
 
 public sealed partial class NotionParityAuditViewModel(
-    NotionParityAuditUseCase auditUseCase) : ObservableObject
+    NotionParityAuditUseCase auditUseCase,
+    INotionExportSourcePicker sourcePicker) : ObservableObject
 {
     private CancellationTokenSource? _scanCancellation;
 
@@ -31,10 +32,13 @@ public sealed partial class NotionParityAuditViewModel(
 
     public bool CanCancel => IsScanning;
 
+    public Task SelectFolderAsync() => SelectAndScanAsync(sourcePicker.PickFolderAsync);
+
+    public Task SelectArchiveAsync() => SelectAndScanAsync(sourcePicker.PickArchiveAsync);
+
     public async Task ScanAsync(string sourcePath)
     {
         _scanCancellation?.Cancel();
-        _scanCancellation?.Dispose();
         var scanCancellation = new CancellationTokenSource();
         _scanCancellation = scanCancellation;
         var cancellationToken = scanCancellation.Token;
@@ -82,10 +86,46 @@ public sealed partial class NotionParityAuditViewModel(
             {
                 IsScanning = false;
                 _scanCancellation = null;
-                scanCancellation.Dispose();
             }
+
+            scanCancellation.Dispose();
         }
     }
 
     public void Cancel() => _scanCancellation?.Cancel();
+
+    private async Task SelectAndScanAsync(
+        Func<CancellationToken, Task<string?>> selectSource)
+    {
+        ErrorMessage = null;
+        try
+        {
+            var sourcePath = await selectSource(CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                StatusMessage = Report is null
+                    ? "Selection canceled. Nothing was scanned or saved."
+                    : "Selection canceled. The previous report is still available.";
+                return;
+            }
+
+            await ScanAsync(sourcePath);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Report is null
+                ? "Selection canceled. Nothing was scanned or saved."
+                : "Selection canceled. The previous report is still available.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            ErrorMessage = "SecondBrain cannot open that location. Grant file access or choose another source, then retry.";
+            StatusMessage = "Selection failed safely. No application data was changed.";
+        }
+        catch (Exception)
+        {
+            ErrorMessage = "SecondBrain could not open the selected export. Choose another folder or archive, then retry.";
+            StatusMessage = "Selection failed safely. No application data was changed.";
+        }
+    }
 }

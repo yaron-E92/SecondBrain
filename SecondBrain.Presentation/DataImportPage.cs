@@ -1,4 +1,3 @@
-using CommunityToolkit.Maui.Storage;
 using Microsoft.Maui.Controls.Shapes;
 using SecondBrain.Application.NotionAudit;
 using SecondBrain.Presentation.ViewModels;
@@ -23,7 +22,7 @@ public sealed class DataImportPage : ContentPage
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditSelectFolder"
         };
-        selectFolder.Clicked += async (_, _) => await SelectFolderAsync();
+        selectFolder.Clicked += async (_, _) => await _viewModel.SelectFolderAsync();
 
         var selectArchive = new Button
         {
@@ -31,16 +30,21 @@ public sealed class DataImportPage : ContentPage
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditSelectArchive"
         };
-        selectArchive.Clicked += async (_, _) => await SelectArchiveAsync();
+        selectArchive.Clicked += async (_, _) => await _viewModel.SelectArchiveAsync();
 
-        var cancel = new Button { Text = "Cancel scan" };
+        var cancel = new Button
+        {
+            Text = "Cancel scan",
+            AutomationId = "NotionAuditCancel"
+        };
         cancel.SetBinding(IsVisibleProperty, nameof(viewModel.CanCancel));
         cancel.Clicked += (_, _) => viewModel.Cancel();
 
         var export = new Button
         {
             Text = "Export redacted report",
-            HorizontalOptions = LayoutOptions.Start
+            HorizontalOptions = LayoutOptions.Start,
+            AutomationId = "NotionAuditExportReport"
         };
         export.SetBinding(IsVisibleProperty, nameof(viewModel.HasReport));
         export.Clicked += async (_, _) => await ExportReportAsync();
@@ -100,50 +104,6 @@ public sealed class DataImportPage : ContentPage
             }
         };
     }
-
-    private async Task SelectFolderAsync()
-    {
-        try
-        {
-            var result = await FolderPicker.Default.PickAsync(CancellationToken.None);
-            if (result.IsSuccessful)
-            {
-                await _viewModel.ScanAsync(result.Folder.Path);
-            }
-            else if (result.Exception is not null)
-            {
-                throw result.Exception;
-            }
-        }
-        catch (Exception exception)
-        {
-            await DisplayPickerErrorAsync(exception);
-        }
-    }
-
-    private async Task SelectArchiveAsync()
-    {
-        try
-        {
-            var file = await FilePicker.Default.PickAsync(new PickOptions
-            {
-                PickerTitle = "Choose a Notion ZIP archive or supported manifest"
-            });
-            if (file is not null)
-            {
-                await _viewModel.ScanAsync(file.FullPath);
-            }
-        }
-        catch (Exception exception)
-        {
-            await DisplayPickerErrorAsync(exception);
-        }
-    }
-
-    private Task DisplayPickerErrorAsync(Exception exception) => DisplayAlertAsync(
-        "Could not open picker",
-        $"Choose the export again after checking file permissions. {exception.Message}",
-        "OK");
 
     private void BuildReport(NotionAuditReport? report)
     {

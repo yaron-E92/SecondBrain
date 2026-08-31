@@ -1,6 +1,7 @@
 using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
 using SecondBrain.Application;
+using SecondBrain.Application.NotionAudit;
 using SecondBrain.Application.UseCases;
 using SecondBrain.Presentation.ViewModels;
 using SecondBrain.Persistence;
@@ -22,6 +23,7 @@ public static class MauiProgram
         builder.Services.AddSecondBrainApplication();
         builder.Services.AddSecondBrainPersistence(databasePath);
         builder.Services.AddScoped<DashboardUseCase>();
+        builder.Services.AddSingleton<INotionExportSourcePicker, MauiNotionExportSourcePicker>();
         builder.Services.AddSingleton<InboxViewModel>();
         builder.Services.AddSingleton<DashboardViewModel>();
         builder.Services.AddSingleton<ParaBrowserViewModel>();
