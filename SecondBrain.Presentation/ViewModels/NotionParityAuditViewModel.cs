@@ -72,7 +72,7 @@ public sealed partial class NotionParityAuditViewModel(
                 StatusMessage = "Audit failed safely. No application data was changed.";
             }
         }
-        catch (Exception exception) when (exception is IOException or JsonException or NotSupportedException)
+        catch (Exception exception) when (exception is IOException or InvalidDataException or JsonException or NotSupportedException)
         {
             if (ReferenceEquals(_scanCancellation, scanCancellation))
             {
