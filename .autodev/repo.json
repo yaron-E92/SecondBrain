@@ -2,5 +2,10 @@
   "opencode": {
     "enabled": true
   },
+  "ux": {
+    "enabled": true,
+    "artifact": "oci://ghcr.io/yaron-e92/ux/secondbrain@sha256:787aea016f84a9f4d3aac429308ff38c1d62e3f80cf71852ab98435c73f3b8a5",
+    "product": "secondbrain"
+  },
   "version": 1
 }
