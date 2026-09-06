@@ -22,6 +22,9 @@ public sealed record NotionExportRowMetadata(
     IReadOnlyList<NotionExportRelation> Relations)
 {
     public string? ContentFingerprint { get; init; }
+
+    public IReadOnlyDictionary<string, string> Values { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed record NotionExportTableMetadata(

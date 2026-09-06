@@ -6,9 +6,13 @@ namespace SecondBrain.Presentation.ViewModels;
 
 public sealed partial class NotionParityAuditViewModel(
     NotionParityAuditUseCase auditUseCase,
-    INotionExportSourcePicker sourcePicker) : ObservableObject
+    INotionExportSourcePicker sourcePicker,
+    NotionImportUseCase? importUseCase = null) : ObservableObject
 {
     private CancellationTokenSource? _scanCancellation;
+    private readonly Dictionary<string, NotionResourceResolution> _resourceResolutions =
+        new(StringComparer.OrdinalIgnoreCase);
+    private string? _sourcePath;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanCancel))]
@@ -17,6 +21,17 @@ public sealed partial class NotionParityAuditViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasReport))]
     public partial NotionAuditReport? Report { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmImport))]
+    public partial NotionImportPlan? ImportPlan { get; set; }
+
+    [ObservableProperty]
+    public partial NotionImportResult? ImportResult { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmImport))]
+    public partial bool IsImporting { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
@@ -31,6 +46,8 @@ public sealed partial class NotionParityAuditViewModel(
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
     public bool CanCancel => IsScanning;
+
+    public bool CanConfirmImport => importUseCase is not null && ImportPlan is { RequiresReview: false } && !IsImporting;
 
     public Task SelectFolderAsync() => SelectAndScanAsync(sourcePicker.PickFolderAsync);
 
@@ -48,11 +65,21 @@ public sealed partial class NotionParityAuditViewModel(
         try
         {
             var report = await auditUseCase.AuditAsync(sourcePath, cancellationToken);
+            var importPlan = importUseCase is null
+                ? null
+                : await importUseCase.PreviewAsync(sourcePath, _resourceResolutions, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (ReferenceEquals(_scanCancellation, scanCancellation))
             {
+                _sourcePath = sourcePath;
                 Report = report;
-                StatusMessage = "Audit complete. Review every warning before importing.";
+                ImportPlan = importPlan;
+                ImportResult = null;
+                StatusMessage = importPlan is null
+                    ? "Audit complete. Review every warning before importing."
+                    : importPlan.RequiresReview
+                        ? "Dry run complete. Resolve every blocking decision before importing."
+                        : "Dry run complete. Review the report, then confirm once to import.";
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -93,6 +120,48 @@ public sealed partial class NotionParityAuditViewModel(
     }
 
     public void Cancel() => _scanCancellation?.Cancel();
+
+    public async Task ResolveResourceAsync(string notionId, NotionResourceResolution resolution)
+    {
+        if (importUseCase is null || string.IsNullOrWhiteSpace(_sourcePath))
+        {
+            return;
+        }
+
+        _resourceResolutions[notionId] = resolution;
+        ImportPlan = await importUseCase.PreviewAsync(_sourcePath, _resourceResolutions);
+        StatusMessage = ImportPlan.RequiresReview
+            ? "Decision saved. Resolve the remaining blocking items."
+            : "Review complete. Confirm once to import, or leave this page to cancel.";
+    }
+
+    public async Task ConfirmImportAsync()
+    {
+        if (importUseCase is null || ImportPlan is not { RequiresReview: false } plan || IsImporting)
+        {
+            return;
+        }
+
+        IsImporting = true;
+        ErrorMessage = null;
+        StatusMessage = "Importing in one local transaction…";
+        try
+        {
+            ImportResult = await importUseCase.ConfirmAsync(plan);
+            StatusMessage = ImportResult.RolledBack
+                ? "Import failed and was rolled back. Review the report and retry."
+                : $"Import complete: {ImportResult.Created} created, {ImportResult.Updated} updated, {ImportResult.Skipped} skipped, {ImportResult.Conflicted} conflicted.";
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException)
+        {
+            ErrorMessage = $"Import could not complete. No partial data was kept. {exception.Message}";
+            StatusMessage = "Import failed safely. Correct the source or review choices and retry.";
+        }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
 
     private async Task SelectAndScanAsync(
         Func<CancellationToken, Task<string?>> selectSource)

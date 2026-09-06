@@ -15,6 +15,7 @@ public static class SecondBrainApplicationRegistration
         services.AddScoped<CoreKnowledgeUseCases>();
         services.AddScoped<ReviewUseCase>();
         services.AddScoped<NotionParityAuditUseCase>();
+        services.AddScoped<NotionImportUseCase>();
         return services;
     }
 }

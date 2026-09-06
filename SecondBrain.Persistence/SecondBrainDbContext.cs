@@ -36,6 +36,8 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
 
     internal DbSet<ReviewStateRow> ReviewStates => Set<ReviewStateRow>();
 
+    internal DbSet<NotionImportProvenanceRow> NotionImportProvenance => Set<NotionImportProvenanceRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureProjects(modelBuilder);
@@ -46,6 +48,7 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
         ConfigureBrainItemCollections(modelBuilder);
         ConfigureJournals(modelBuilder);
         ConfigureReviewStates(modelBuilder);
+        ConfigureNotionImportProvenance(modelBuilder);
     }
 
     private static void ConfigureProjects(ModelBuilder modelBuilder)
@@ -251,5 +254,23 @@ public sealed class SecondBrainDbContext(DbContextOptions<SecondBrainDbContext> 
                 "TargetId <> '00000000-0000-0000-0000-000000000000'");
         });
         reviews.HasKey(row => new { row.TargetKind, row.TargetId });
+    }
+
+    private static void ConfigureNotionImportProvenance(ModelBuilder modelBuilder)
+    {
+        var provenance = modelBuilder.Entity<NotionImportProvenanceRow>();
+        provenance.ToTable("NotionImportProvenance", table =>
+        {
+            table.HasCheckConstraint("CK_NotionImportProvenance_DatabaseId", "length(DatabaseNotionId) = 32");
+            table.HasCheckConstraint("CK_NotionImportProvenance_PageId", "length(PageNotionId) = 32");
+            table.HasCheckConstraint("CK_NotionImportProvenance_TargetId", "TargetId <> '00000000-0000-0000-0000-000000000000'");
+        });
+        provenance.HasKey(row => new { row.DatabaseNotionId, row.PageNotionId });
+        provenance.Property(row => row.DatabaseNotionId).HasMaxLength(32);
+        provenance.Property(row => row.PageNotionId).HasMaxLength(32);
+        provenance.Property(row => row.SpecificationVersion).HasMaxLength(20).IsRequired();
+        provenance.Property(row => row.ContentFingerprint).HasMaxLength(128).IsRequired();
+        provenance.Property(row => row.TargetKind).HasMaxLength(40).IsRequired();
+        provenance.HasIndex(row => row.TargetId).IsUnique();
     }
 }

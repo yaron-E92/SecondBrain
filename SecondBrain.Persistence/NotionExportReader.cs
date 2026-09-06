@@ -174,7 +174,11 @@ public sealed class NotionExportReader : INotionExportReader
                         OptionalBoolean(row, "archived"),
                         relations)
                     {
-                        ContentFingerprint = Fingerprint(row.GetRawText())
+                        ContentFingerprint = Fingerprint(row.GetRawText()),
+                        Values = row.EnumerateObject().ToDictionary(
+                            property => property.Name,
+                            property => PropertyValue(property.Value),
+                            StringComparer.OrdinalIgnoreCase)
                     });
                 }
             }
@@ -230,7 +234,8 @@ public sealed class NotionExportReader : INotionExportReader
                     values.TryGetValue("Archived", out var archived) && bool.TryParse(archived, out var isArchived) && isArchived,
                     relations)
                 {
-                    ContentFingerprint = FingerprintCsvRow(headers, record)
+                    ContentFingerprint = FingerprintCsvRow(headers, record),
+                    Values = values
                 };
             })
             .ToArray();
@@ -423,6 +428,16 @@ public sealed class NotionExportReader : INotionExportReader
         property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+
+    private static string PropertyValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString() ?? string.Empty,
+        JsonValueKind.True => bool.TrueString,
+        JsonValueKind.False => bool.FalseString,
+        JsonValueKind.Null => string.Empty,
+        JsonValueKind.Array => string.Join(",", value.EnumerateArray().Select(PropertyValue)),
+        _ => value.GetRawText(),
+    };
 
     private static bool OptionalBoolean(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var property) &&
