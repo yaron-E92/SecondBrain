@@ -65,17 +65,21 @@ public sealed class NotionImportExecutorTests
             await context.Database.MigrateAsync();
             var executor = new NotionImportExecutor(context);
             var areaId = "20000000000000000000000000000051";
-            var sourceId = "20000000000000000000000000000052";
-            var contextualId = "20000000000000000000000000000053";
-            var derivedId = "20000000000000000000000000000054";
-            var provenanceId = "20000000000000000000000000000055";
+            var captureId = "20000000000000000000000000000052";
+            var artifactId = "20000000000000000000000000000053";
+            var contextualId = "20000000000000000000000000000054";
+            var derivedId = "20000000000000000000000000000055";
+            var provenanceId = "20000000000000000000000000000056";
             var plan = new NotionImportPlan("1.0",
             [
                 AreaRecord(areaId, "area-v1"),
-                NoteRecord(sourceId, areaId, "source-v1",
+                CaptureRecord(captureId, areaId, "capture-v1",
                 [
                     new NotionImportRelation("relatedNotionIds", NotionImportRelationKind.Contextual, [contextualId]),
                     new NotionImportRelation("derivedNotionIds", NotionImportRelationKind.Derived, [derivedId]),
+                ]),
+                ResourceArtifactRecord(artifactId, areaId, "artifact-v1",
+                [
                     new NotionImportRelation("sourceNotionIds", NotionImportRelationKind.Provenance, [provenanceId]),
                 ]),
                 NoteRecord(contextualId, areaId, "contextual-v1"),
@@ -90,7 +94,7 @@ public sealed class NotionImportExecutorTests
             Assert.Multiple(() =>
             {
                 Assert.That(result.RolledBack, Is.False, diagnostics);
-                Assert.That(result.Created, Is.EqualTo(5));
+                Assert.That(result.Created, Is.EqualTo(6));
                 Assert.That(kinds, Is.EquivalentTo(new[] { 0, 1, 2 }));
             });
         }
@@ -139,7 +143,8 @@ public sealed class NotionImportExecutorTests
                 Assert.That(blocked.Created, Is.Zero);
                 Assert.That(blocked.Conflicted, Is.EqualTo(1));
                 Assert.That(blocked.Skipped, Is.EqualTo(2));
-                Assert.That(blocked.Diagnostics, Has.Some.Property("Code").EqualTo("import-blocked-by-conflicts"));
+                Assert.That(blocked.Diagnostics,
+                    Has.Some.Property("Code").EqualTo(NotionImportDiagnosticCodes.ImportBlockedByConflicts));
                 Assert.That(provenanceCount, Is.EqualTo(2));
             });
         }
@@ -163,20 +168,79 @@ public sealed class NotionImportExecutorTests
         string id,
         string areaId,
         string fingerprint,
-        IReadOnlyList<NotionImportRelation>? relations = null) => new(
-        "10000000000000000000000000000052",
-        id,
-        "Notes.csv",
-        NotionImportTarget.Note,
-        fingerprint,
-        new Dictionary<string, string>
+        IReadOnlyList<NotionImportRelation>? relations = null) =>
+        BrainItemRecord(
+            id,
+            areaId,
+            fingerprint,
+            NotionImportTarget.Note,
+            "Notes.csv",
+            relations);
+
+    private static NotionImportRecord CaptureRecord(
+        string id,
+        string areaId,
+        string fingerprint,
+        IReadOnlyList<NotionImportRelation>? relations = null) =>
+        BrainItemRecord(
+            id,
+            areaId,
+            fingerprint,
+            NotionImportTarget.KnowledgeCapture,
+            "Captures.csv",
+            relations,
+            new Dictionary<string, string>
+            {
+                ["sourceUrl"] = "https://example.invalid/source",
+                ["sourceCitation"] = "Synthetic source citation",
+            });
+
+    private static NotionImportRecord ResourceArtifactRecord(
+        string id,
+        string areaId,
+        string fingerprint,
+        IReadOnlyList<NotionImportRelation>? relations = null) =>
+        BrainItemRecord(
+            id,
+            areaId,
+            fingerprint,
+            NotionImportTarget.ResourceArtifact,
+            "Resources.csv",
+            relations);
+
+    private static NotionImportRecord BrainItemRecord(
+        string id,
+        string areaId,
+        string fingerprint,
+        NotionImportTarget target,
+        string sourceName,
+        IReadOnlyList<NotionImportRelation>? relations = null,
+        IReadOnlyDictionary<string, string>? extraValues = null)
+    {
+        var values = new Dictionary<string, string>
         {
-            ["name"] = $"Note {id[^2..]}",
+            ["name"] = $"{target} {id[^2..]}",
             ["content"] = "Synthetic content.",
             ["primaryType"] = "Area",
             ["primaryNotionId"] = areaId,
-        },
-        relations ?? []);
+        };
+        if (extraValues is not null)
+        {
+            foreach (var pair in extraValues)
+            {
+                values[pair.Key] = pair.Value;
+            }
+        }
+
+        return new NotionImportRecord(
+            "10000000000000000000000000000052",
+            id,
+            sourceName,
+            target,
+            fingerprint,
+            values,
+            relations ?? []);
+    }
 
     private static async Task<int[]> ReadIntegerColumnAsync(SecondBrainDbContext context, string sql)
     {
