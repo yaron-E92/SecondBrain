@@ -105,6 +105,10 @@ public sealed class NotionImportExecutor : INotionImportExecutor
                 });
             }
 
+            // Establish every new Core identity before relation rows reference them.
+            // Both phases remain inside this transaction, so a later relation failure
+            // still rolls back the target/provenance writes atomically.
+            await context.SaveChangesAsync(cancellationToken);
             await AddRelationsAsync(context, pending, targets, diagnostics, cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
