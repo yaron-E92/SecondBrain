@@ -40,6 +40,7 @@ public sealed class SqlitePersistenceTests
                 "20260724153000_InitialCorePersistence",
                 "20260804090000_AddJournalArchiveState",
                 "20260814120000_AddReviewState",
+                "20260905120000_AddNotionImportProvenance",
             ]));
     }
 

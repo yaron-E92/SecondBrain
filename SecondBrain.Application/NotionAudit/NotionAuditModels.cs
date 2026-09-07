@@ -12,6 +12,21 @@ public enum NotionAuditStatus
 
 public sealed record NotionExportRelation(
     string FieldName,
+    IReadOnlyList<string> TargetNotionIds)
+{
+    public string? DeclaredType { get; init; }
+}
+
+public enum NotionImportRelationKind
+{
+    Contextual,
+    Derived,
+    Provenance,
+}
+
+public sealed record NotionImportRelation(
+    string FieldName,
+    NotionImportRelationKind Kind,
     IReadOnlyList<string> TargetNotionIds);
 
 public sealed record NotionExportRowMetadata(
@@ -22,6 +37,9 @@ public sealed record NotionExportRowMetadata(
     IReadOnlyList<NotionExportRelation> Relations)
 {
     public string? ContentFingerprint { get; init; }
+
+    public IReadOnlyDictionary<string, string> Values { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed record NotionExportTableMetadata(

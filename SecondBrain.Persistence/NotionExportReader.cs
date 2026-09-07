@@ -163,7 +163,10 @@ public sealed class NotionExportReader : INotionExportReader
                         {
                             relations.Add(new NotionExportRelation(
                                 property.Name,
-                                RelationshipTargets(property.Value)));
+                                RelationshipTargets(property.Value))
+                            {
+                                DeclaredType = ManifestRelationType(row, property.Name, property.Value)
+                            });
                         }
                     }
 
@@ -174,7 +177,11 @@ public sealed class NotionExportReader : INotionExportReader
                         OptionalBoolean(row, "archived"),
                         relations)
                     {
-                        ContentFingerprint = Fingerprint(row.GetRawText())
+                        ContentFingerprint = Fingerprint(row.GetRawText()),
+                        Values = row.EnumerateObject().ToDictionary(
+                            property => property.Name,
+                            property => PropertyValue(property.Value),
+                            StringComparer.OrdinalIgnoreCase)
                     });
                 }
             }
@@ -219,7 +226,7 @@ public sealed class NotionExportReader : INotionExportReader
                     .ToDictionary(StringComparer.OrdinalIgnoreCase);
                 var relations = values
                     .Where(value => IsRelationshipField(value.Key))
-                    .Select(value => CsvRelationship(value.Key, value.Value))
+                    .Select(value => CsvRelationship(value.Key, value.Value, values))
                     .ToArray();
                 values.TryGetValue("Notion ID", out var notionId);
                 values.TryGetValue("Classification", out var classification);
@@ -230,7 +237,8 @@ public sealed class NotionExportReader : INotionExportReader
                     values.TryGetValue("Archived", out var archived) && bool.TryParse(archived, out var isArchived) && isArchived,
                     relations)
                 {
-                    ContentFingerprint = FingerprintCsvRow(headers, record)
+                    ContentFingerprint = FingerprintCsvRow(headers, record),
+                    Values = values
                 };
             })
             .ToArray();
@@ -246,6 +254,12 @@ public sealed class NotionExportReader : INotionExportReader
     private static bool IsRelationshipField(string fieldName)
     {
         var normalized = fieldName.Replace(" ", string.Empty, StringComparison.Ordinal);
+        var canonical = NormalizeField(fieldName);
+        if (canonical.EndsWith("relationtype", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         return normalized.Contains("relation", StringComparison.OrdinalIgnoreCase) ||
             (!normalized.Equals("notionid", StringComparison.OrdinalIgnoreCase) &&
              (normalized.EndsWith("notionid", StringComparison.OrdinalIgnoreCase) ||
@@ -264,7 +278,10 @@ public sealed class NotionExportReader : INotionExportReader
             normalized.Equals("resourcetopics", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static NotionExportRelation CsvRelationship(string fieldName, string value)
+    private static NotionExportRelation CsvRelationship(
+        string fieldName,
+        string value,
+        IReadOnlyDictionary<string, string> values)
     {
         var references = value.Split(
             [',', ';'],
@@ -275,11 +292,27 @@ public sealed class NotionExportReader : INotionExportReader
                 .Where(reference => !NotionIdPattern.IsMatch(reference))
                 .Select(_ => UnresolvedRelationTarget))
             .ToArray();
-        return new NotionExportRelation(fieldName, targets);
+        return new NotionExportRelation(fieldName, targets)
+        {
+            DeclaredType = CsvRelationType(values, fieldName)
+        };
     }
 
     private static IReadOnlyList<string> RelationshipTargets(JsonElement value)
     {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var propertyName in new[] { "targetNotionIds", "targets", "ids", "targetNotionId" })
+            {
+                if (value.TryGetProperty(propertyName, out var nested))
+                {
+                    return RelationshipTargets(nested);
+                }
+            }
+
+            return [];
+        }
+
         var references = value.ValueKind switch
         {
             JsonValueKind.String => value.GetString()!
@@ -299,6 +332,71 @@ public sealed class NotionExportReader : INotionExportReader
                 .Select(_ => UnresolvedRelationTarget))
             .ToArray();
     }
+
+    private static string? ManifestRelationType(
+        JsonElement row,
+        string fieldName,
+        JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var declared = OptionalString(value, "relationType") ?? OptionalString(value, "type");
+            if (!string.IsNullOrWhiteSpace(declared))
+            {
+                return declared;
+            }
+        }
+
+        var keys = RelationTypeKeys(fieldName);
+        foreach (var property in row.EnumerateObject())
+        {
+            if (keys.Contains(NormalizeField(property.Name)) && property.Value.ValueKind == JsonValueKind.String)
+            {
+                return property.Value.GetString();
+            }
+        }
+
+        return null;
+    }
+
+    private static string? CsvRelationType(
+        IReadOnlyDictionary<string, string> values,
+        string fieldName)
+    {
+        var keys = RelationTypeKeys(fieldName);
+        foreach (var pair in values)
+        {
+            if (keys.Contains(NormalizeField(pair.Key)) && !string.IsNullOrWhiteSpace(pair.Value))
+            {
+                return pair.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private static HashSet<string> RelationTypeKeys(string fieldName)
+    {
+        var normalized = NormalizeField(fieldName);
+        var root = normalized.EndsWith("notionids", StringComparison.Ordinal)
+            ? normalized[..^9]
+            : normalized.EndsWith("notionid", StringComparison.Ordinal)
+                ? normalized[..^8]
+                : normalized;
+        return new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{normalized}type",
+            $"{normalized}relationtype",
+            $"{root}type",
+            $"{root}relationtype",
+        };
+    }
+
+    private static string NormalizeField(string value) => value
+        .Replace(" ", string.Empty, StringComparison.Ordinal)
+        .Replace("_", string.Empty, StringComparison.Ordinal)
+        .Replace("-", string.Empty, StringComparison.Ordinal)
+        .ToLowerInvariant();
 
     private static bool IsDuplicateAllView(string sourceName) =>
         HasDuplicateViewSuffix(RemoveTrailingNotionId(Path.GetFileNameWithoutExtension(sourceName)));
@@ -423,6 +521,16 @@ public sealed class NotionExportReader : INotionExportReader
         property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+
+    private static string PropertyValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString() ?? string.Empty,
+        JsonValueKind.True => bool.TrueString,
+        JsonValueKind.False => bool.FalseString,
+        JsonValueKind.Null => string.Empty,
+        JsonValueKind.Array => string.Join(",", value.EnumerateArray().Select(PropertyValue)),
+        _ => value.GetRawText(),
+    };
 
     private static bool OptionalBoolean(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var property) &&

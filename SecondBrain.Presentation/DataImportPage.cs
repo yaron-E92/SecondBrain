@@ -1,4 +1,5 @@
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Layouts;
 using SecondBrain.Application.NotionAudit;
 using SecondBrain.Presentation.ViewModels;
 
@@ -8,6 +9,7 @@ public sealed class DataImportPage : ContentPage
 {
     private readonly NotionParityAuditViewModel _viewModel;
     private readonly VerticalStackLayout _reportDetails = new() { Spacing = 12 };
+    private readonly VerticalStackLayout _importReview = new() { Spacing = 8 };
 
     public DataImportPage(NotionParityAuditViewModel viewModel)
     {
@@ -19,6 +21,7 @@ public sealed class DataImportPage : ContentPage
         var selectFolder = new Button
         {
             Text = "Choose export folder",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditSelectFolder"
         };
@@ -27,6 +30,7 @@ public sealed class DataImportPage : ContentPage
         var selectArchive = new Button
         {
             Text = "Choose archive or manifest",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditSelectArchive"
         };
@@ -35,6 +39,7 @@ public sealed class DataImportPage : ContentPage
         var cancel = new Button
         {
             Text = "Cancel scan",
+            MinimumHeightRequest = 44,
             AutomationId = "NotionAuditCancel"
         };
         cancel.SetBinding(IsVisibleProperty, nameof(viewModel.CanCancel));
@@ -43,15 +48,30 @@ public sealed class DataImportPage : ContentPage
         var export = new Button
         {
             Text = "Export redacted report",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditExportReport"
         };
         export.SetBinding(IsVisibleProperty, nameof(viewModel.HasReport));
         export.Clicked += async (_, _) => await ExportReportAsync();
 
+        var confirm = new Button
+        {
+            Text = "Confirm import",
+            MinimumHeightRequest = 44,
+            AutomationId = "NotionImportConfirm"
+        };
+        confirm.SetBinding(IsEnabledProperty, nameof(viewModel.CanConfirmImport));
+        confirm.SetBinding(IsVisibleProperty, nameof(viewModel.HasReport));
+        confirm.Clicked += async (_, _) => await viewModel.ConfirmImportAsync();
+
         var progress = new ActivityIndicator { Color = Colors.DarkSlateBlue };
         progress.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsScanning));
         progress.SetBinding(IsVisibleProperty, nameof(viewModel.IsScanning));
+
+        var importProgress = new ActivityIndicator { Color = Colors.DarkSlateBlue };
+        importProgress.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsImporting));
+        importProgress.SetBinding(IsVisibleProperty, nameof(viewModel.IsImporting));
 
         var status = new Label { TextColor = Colors.DarkSlateGray };
         status.SetBinding(Label.TextProperty, nameof(viewModel.StatusMessage));
@@ -67,8 +87,17 @@ public sealed class DataImportPage : ContentPage
             {
                 BuildReport(viewModel.Report);
             }
+            else if (args.PropertyName == nameof(viewModel.ImportPlan))
+            {
+                BuildImportReview(viewModel.ImportPlan);
+            }
+            else if (args.PropertyName == nameof(viewModel.ImportResult))
+            {
+                BuildImportCompletion(viewModel.ImportResult);
+            }
         };
         BuildReport(viewModel.Report);
+        BuildImportReview(viewModel.ImportPlan);
 
         Content = new ScrollView
         {
@@ -90,19 +119,129 @@ public sealed class DataImportPage : ContentPage
                         Text = "Preview what Core can represent before any import. Exported text stays local and this scan never mutates Core.",
                         TextColor = Colors.DarkSlateGray
                     },
-                    new HorizontalStackLayout
+                    new FlexLayout
                     {
-                        Spacing = 8,
+                        Direction = FlexDirection.Row,
+                        Wrap = FlexWrap.Wrap,
+                        JustifyContent = FlexJustify.Start,
+                        AlignItems = FlexAlignItems.Start,
                         Children = { selectFolder, selectArchive, cancel }
                     },
                     progress,
+                    importProgress,
                     status,
                     error,
                     report,
+                    Card("Import review", _importReview),
+                    confirm,
                     export
                 }
             }
         };
+    }
+
+    private void BuildImportReview(NotionImportPlan? plan)
+    {
+        _importReview.Children.Clear();
+        if (plan is null)
+        {
+            _importReview.Children.Add(new Label { Text = "Choose a source to create a dry-run import plan." });
+            return;
+        }
+
+        _importReview.Children.Add(new Label
+        {
+            Text = $"Eligible: {plan.Records.Count} · Skipped: {plan.Skips.Count} · Blocking: {plan.Deferred.Count} · Unresolved links: {plan.UnresolvedLinks.Count}",
+            TextColor = Colors.Black
+        });
+        foreach (var decision in plan.Deferred.Where(item =>
+                     item.Code == NotionImportDiagnosticCodes.AmbiguousResourceClassificationRequired && item.SourceNotionId is not null))
+        {
+            var choices = new FlexLayout
+            {
+                Direction = FlexDirection.Row,
+                Wrap = FlexWrap.Wrap,
+                JustifyContent = FlexJustify.Start
+            };
+            foreach (var choice in Enum.GetValues<NotionResourceResolution>())
+            {
+                var button = new Button
+                {
+                    Text = choice.ToString(),
+                    MinimumHeightRequest = 44,
+                    MinimumWidthRequest = 72,
+                    Margin = new Thickness(0, 0, 8, 8)
+                };
+                button.Clicked += async (_, _) => await _viewModel.ResolveResourceAsync(decision.SourceNotionId!, choice);
+                choices.Children.Add(button);
+            }
+            _importReview.Children.Add(new Label { Text = "Ambiguous Resource requires a destination:" });
+            _importReview.Children.Add(choices);
+        }
+    }
+
+    private void BuildImportCompletion(NotionImportResult? result)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        if (result.RolledBack)
+        {
+            _importReview.Children.Add(SectionHeading("Import rolled back"));
+            foreach (var diagnostic in result.Diagnostics)
+            {
+                _importReview.Children.Add(ExpandableCard("Rollback diagnostic", diagnostic.Message));
+            }
+
+            return;
+        }
+
+        if (result.BlockedByConflicts)
+        {
+            _importReview.Children.Add(SectionHeading("Import blocked by changed source"));
+            foreach (var diagnostic in result.Diagnostics.Where(item =>
+                         item.Code is NotionImportDiagnosticCodes.ChangedSourceConflict or
+                             NotionImportDiagnosticCodes.ImportBlockedByConflicts))
+            {
+                _importReview.Children.Add(ExpandableCard("Conflict diagnostic", diagnostic.Message));
+            }
+
+            return;
+        }
+
+        _importReview.Children.Add(SectionHeading("Imported results"));
+        foreach (var target in result.Targets.Take(8))
+        {
+            var open = new Button
+            {
+                Text = $"Open {target.Title}",
+                MinimumHeightRequest = 44
+            };
+            open.Clicked += async (_, _) => await OpenImportedTargetAsync(target);
+            _importReview.Children.Add(open);
+        }
+    }
+
+    private static Task OpenImportedTargetAsync(NotionImportedTarget target)
+    {
+        if (target.Kind is NotionImportTarget.Project or NotionImportTarget.Area or NotionImportTarget.ResourceTopic)
+        {
+            var kind = target.Kind == NotionImportTarget.ResourceTopic ? "ResourceTopic" : target.Kind.ToString();
+            return Shell.Current.GoToAsync("//para", new Dictionary<string, object>
+            {
+                ["contextKind"] = kind,
+                ["contextId"] = target.TargetId.ToString(),
+                ["returnRoute"] = "data-import",
+            });
+        }
+
+        return Shell.Current.GoToAsync("//editor", new Dictionary<string, object>
+        {
+            ["itemId"] = target.TargetId.ToString(),
+            ["returnRoute"] = "data-import",
+        });
     }
 
     private void BuildReport(NotionAuditReport? report)
@@ -197,6 +336,7 @@ public sealed class DataImportPage : ContentPage
         var toggle = new Button
         {
             Text = $"Show details: {title}",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Fill
         };
         toggle.Clicked += (_, _) =>
