@@ -40,6 +40,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<CoreEditorPage>();
         builder.Services.AddSingleton<JournalBrowserPage>();
         builder.Services.AddSingleton<ReviewPage>();
+        builder.Services.AddSingleton<SettingsPage>();
         builder.Services.AddSingleton<DataImportPage>();
 
         var app = builder.Build();
