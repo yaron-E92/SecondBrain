@@ -7,7 +7,7 @@ namespace SecondBrain.Persistence.Tests;
 public sealed class NotionImportRelationReaderTests
 {
     [Test]
-    public async Task Manifest_reader_preserves_declared_relation_type_without_treating_text_tags_as_relations()
+    public async Task Manifest_reader_preserves_declared_relation_type_and_audit_tag_metadata()
     {
         var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"notion-relations-{Guid.NewGuid():N}.json");
         try
@@ -46,14 +46,13 @@ public sealed class NotionImportRelationReaderTests
 
             var export = await new NotionExportReader().ReadAsync(path);
             var row = export.Tables.Single().Rows.Single();
-            var relation = row.Relations.Single();
+            var relation = row.Relations.Single(item => item.FieldName == "derivedRelationNotionIds");
 
             Assert.Multiple(() =>
             {
-                Assert.That(relation.FieldName, Is.EqualTo("derivedRelationNotionIds"));
                 Assert.That(relation.DeclaredType, Is.EqualTo("Derived"));
                 Assert.That(relation.TargetNotionIds, Is.EqualTo(new[] { targetId }));
-                Assert.That(row.Relations.Select(item => item.FieldName), Does.Not.Contain("tags"));
+                Assert.That(row.Relations.Select(item => item.FieldName), Does.Contain("tags"));
             });
         }
         finally
