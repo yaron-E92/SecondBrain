@@ -52,10 +52,10 @@ public sealed class NotionImportExecutor : INotionImportExecutor
         if (conflicts.Length > 0)
         {
             diagnostics.AddRange(conflicts.Select(record => new NotionImportDiagnostic(
-                "changed-source-conflict", record.PageNotionId, null,
+                NotionImportDiagnosticCodes.ChangedSourceConflict, record.PageNotionId, null,
                 "This Notion page was imported previously with different content; existing Core data was preserved.")));
             diagnostics.Add(new NotionImportDiagnostic(
-                "import-blocked-by-conflicts", null, null,
+                NotionImportDiagnosticCodes.ImportBlockedByConflicts, null, null,
                 $"No changes were applied because {conflicts.Length} previously imported source record(s) changed. Resolve the conflicts and preview again."));
             var conflictIds = conflicts.Select(record => record.PageNotionId)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -122,7 +122,7 @@ public sealed class NotionImportExecutor : INotionImportExecutor
         {
             await transaction.RollbackAsync(CancellationToken.None);
             diagnostics.Add(new NotionImportDiagnostic(
-                "transaction-rolled-back", null, null,
+                NotionImportDiagnosticCodes.TransactionRolledBack, null, null,
                 $"Nothing was imported. Correct the source and retry. {RootMessage(exception)}"));
             return new NotionImportResult(0, 0, existing.Count, 0, diagnostics, true);
         }
@@ -225,12 +225,12 @@ public sealed class NotionImportExecutor : INotionImportExecutor
                     if (!brainItemIds.Contains(targetId))
                     {
                         if (!diagnostics.Any(diagnostic =>
-                                diagnostic.Code == "relation-not-representable" &&
+                                diagnostic.Code == NotionImportDiagnosticCodes.RelationNotRepresentable &&
                                 string.Equals(diagnostic.SourceNotionId, record.PageNotionId, StringComparison.OrdinalIgnoreCase) &&
                                 string.Equals(diagnostic.TargetNotionId, target, StringComparison.OrdinalIgnoreCase)))
                         {
                             diagnostics.Add(new NotionImportDiagnostic(
-                                "relation-not-representable",
+                                NotionImportDiagnosticCodes.RelationNotRepresentable,
                                 record.PageNotionId,
                                 target,
                                 $"{relation.FieldName} targets a Core context rather than a BrainItem; the relation was reported instead of silently discarded."));
