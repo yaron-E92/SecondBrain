@@ -33,7 +33,8 @@ public sealed class NotionImportUseCaseTests
         {
             Assert.That(plan.RequiresReview, Is.True);
             Assert.That(plan.Records.Select(record => record.PageNotionId), Does.Not.Contain(noteId));
-            Assert.That(plan.Deferred, Has.Some.Property("Code").EqualTo("invalid-target-data"));
+            Assert.That(plan.Deferred,
+                Has.Some.Property("Code").EqualTo(NotionImportDiagnosticCodes.InvalidTargetData));
             Assert.That(executor.Executions, Is.Zero);
         });
     }
@@ -54,9 +55,10 @@ public sealed class NotionImportUseCaseTests
         [
             Table("Areas", "10000000000000000000000000000011",
                 [Row(areaId, new Dictionary<string, string> { ["name"] = "Synthetic area" })]),
-            Table("Notes", "10000000000000000000000000000012",
+            Table("Captures", "10000000000000000000000000000012",
+                [CaptureRow(sourceId, areaId, "Source capture", sourceRelations)]),
+            Table("Notes", "10000000000000000000000000000013",
             [
-                BrainItemRow(sourceId, areaId, "Source", sourceRelations),
                 BrainItemRow(derivedTargetId, areaId, "Derived target"),
                 BrainItemRow(relatedTargetId, areaId, "Related target"),
             ]),
@@ -69,6 +71,7 @@ public sealed class NotionImportUseCaseTests
         Assert.Multiple(() =>
         {
             Assert.That(plan.RequiresReview, Is.False);
+            Assert.That(source.Target, Is.EqualTo(NotionImportTarget.KnowledgeCapture));
             Assert.That(source.Relations.Single(relation => relation.FieldName == "derivedRelationNotionIds").Kind,
                 Is.EqualTo(NotionImportRelationKind.Derived));
             Assert.That(source.Relations.Single(relation => relation.FieldName == "relatedNotionIds").Kind,
@@ -101,7 +104,42 @@ public sealed class NotionImportUseCaseTests
         {
             Assert.That(plan.RequiresReview, Is.True);
             Assert.That(plan.Records.Select(record => record.PageNotionId), Does.Not.Contain(sourceId));
-            Assert.That(plan.Deferred, Has.Some.Property("Code").EqualTo("unsupported-relation-type"));
+            Assert.That(plan.Deferred,
+                Has.Some.Property("Code").EqualTo(NotionImportDiagnosticCodes.UnsupportedRelationType));
+        });
+    }
+
+    [Test]
+    public void Plan_blocks_relation_kind_that_violates_source_lifecycle()
+    {
+        var areaId = "20000000000000000000000000000025";
+        var derivedSourceId = "20000000000000000000000000000026";
+        var provenanceSourceId = "20000000000000000000000000000027";
+        var targetId = "20000000000000000000000000000028";
+        var export = new NotionExportMetadata(
+        [
+            Table("Areas", "10000000000000000000000000000025",
+                [Row(areaId, new Dictionary<string, string> { ["name"] = "Synthetic area" })]),
+            Table("Notes", "10000000000000000000000000000026",
+            [
+                BrainItemRow(derivedSourceId, areaId, "Invalid derived source",
+                    [new NotionExportRelation("derivedNotionIds", [targetId]) { DeclaredType = "Derived" }]),
+                BrainItemRow(provenanceSourceId, areaId, "Invalid provenance source",
+                    [new NotionExportRelation("sourceNotionIds", [targetId]) { DeclaredType = "Provenance" }]),
+                BrainItemRow(targetId, areaId, "Target"),
+            ]),
+        ], []);
+        var useCase = new NotionImportUseCase(new UnusedReader(), new RecordingExecutor());
+
+        var plan = useCase.Plan(export);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(plan.RequiresReview, Is.True);
+            Assert.That(plan.Records.Select(record => record.PageNotionId),
+                Does.Not.Contain(derivedSourceId).And.Not.Contain(provenanceSourceId));
+            Assert.That(plan.Deferred.Count(diagnostic =>
+                diagnostic.Code == NotionImportDiagnosticCodes.InvalidRelationLifecycle), Is.EqualTo(2));
         });
     }
 
@@ -123,7 +161,7 @@ public sealed class NotionImportUseCaseTests
         var plan = useCase.Plan(export);
 
         Assert.That(plan.UnresolvedLinks, Has.Some.Matches<NotionImportDiagnostic>(diagnostic =>
-            diagnostic.Code == "relation-not-representable" &&
+            diagnostic.Code == NotionImportDiagnosticCodes.RelationNotRepresentable &&
             diagnostic.SourceNotionId == areaId &&
             diagnostic.TargetNotionId == projectId));
     }
@@ -140,7 +178,8 @@ public sealed class NotionImportUseCaseTests
 
         var plan = useCase.Plan(export);
 
-        Assert.That(plan.Skips, Has.Some.Property("Code").EqualTo("module-owned-shuffletask"));
+        Assert.That(plan.Skips,
+            Has.Some.Property("Code").EqualTo(NotionImportDiagnosticCodes.ModuleOwnedShuffleTask));
     }
 
     [Test]
@@ -172,6 +211,21 @@ public sealed class NotionImportUseCaseTests
             ["content"] = $"Synthetic content for {name}.",
             ["primaryType"] = "Area",
             ["primaryNotionId"] = areaId,
+        }, relations);
+
+    private static NotionExportRowMetadata CaptureRow(
+        string id,
+        string areaId,
+        string name,
+        IReadOnlyList<NotionExportRelation>? relations = null) =>
+        Row(id, new Dictionary<string, string>
+        {
+            ["name"] = name,
+            ["content"] = $"Synthetic content for {name}.",
+            ["primaryType"] = "Area",
+            ["primaryNotionId"] = areaId,
+            ["sourceUrl"] = "https://example.invalid/source",
+            ["sourceCitation"] = "Synthetic source citation",
         }, relations);
 
     private static NotionExportRowMetadata Row(
