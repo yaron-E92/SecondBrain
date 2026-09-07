@@ -10,6 +10,7 @@ public sealed class AppShell : Shell
         JournalBrowserPage journalBrowserPage,
         CoreEditorPage coreEditorPage,
         ReviewPage reviewPage,
+        SettingsPage settingsPage,
         DataImportPage dataImportPage)
     {
         Title = "SecondBrain";
@@ -69,8 +70,23 @@ public sealed class AppShell : Shell
 
         Items.Add(new FlyoutItem
         {
+            Route = "settings",
+            Title = "Settings",
+            Items =
+            {
+                new ShellContent
+                {
+                    Title = "Settings",
+                    Content = settingsPage
+                }
+            }
+        });
+
+        Items.Add(new FlyoutItem
+        {
             Route = "data-import",
             Title = "Data / Import",
+            FlyoutItemIsVisible = false,
             Items =
             {
                 new ShellContent
