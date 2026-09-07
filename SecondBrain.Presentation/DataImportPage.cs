@@ -15,8 +15,18 @@ public sealed class DataImportPage : ContentPage
     {
         _viewModel = viewModel;
         BindingContext = viewModel;
-        Title = "Data / Import";
+        Title = "Import";
         BackgroundColor = Colors.White;
+
+        var backToSettings = new ToolbarItem
+        {
+            Text = "Back to Settings",
+            Order = ToolbarItemOrder.Primary,
+            Priority = 0,
+            AutomationId = "ImportBackToSettings"
+        };
+        backToSettings.Clicked += async (_, _) => await Shell.Current.GoToAsync("//settings");
+        ToolbarItems.Add(backToSettings);
 
         var selectFolder = new Button
         {
@@ -109,7 +119,14 @@ public sealed class DataImportPage : ContentPage
                 {
                     new Label
                     {
-                        Text = "Notion parity audit",
+                        Text = "Settings / Data / Import",
+                        FontSize = 13,
+                        TextColor = Colors.DarkSlateGray,
+                        AutomationId = "ImportBreadcrumb"
+                    },
+                    new Label
+                    {
+                        Text = "Import from Notion",
                         FontSize = 28,
                         FontAttributes = FontAttributes.Bold,
                         TextColor = Colors.Black
