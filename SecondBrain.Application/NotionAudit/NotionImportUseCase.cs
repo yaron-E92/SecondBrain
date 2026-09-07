@@ -104,7 +104,8 @@ public sealed class NotionImportUseCase(
             var database = table.DatabaseName?.Trim();
             if (table.IsDuplicateAllView)
             {
-                skips.Add(Diagnostic("duplicate-all-view", null, null, $"{table.SourceName} is a duplicate _all view."));
+                skips.Add(Diagnostic(NotionImportDiagnosticCodes.DuplicateAllView, null, null,
+                    $"{table.SourceName} is a duplicate _all view."));
                 continue;
             }
 
@@ -113,14 +114,20 @@ public sealed class NotionImportUseCase(
                 var isShuffleTask = database is not null &&
                     (database.Equals("Tasks", StringComparison.OrdinalIgnoreCase) ||
                      database.Equals("Chores", StringComparison.OrdinalIgnoreCase));
-                var code = isShuffleTask ? "module-owned-shuffletask" : "module-owned-phoodab";
+                var code = isShuffleTask
+                    ? NotionImportDiagnosticCodes.ModuleOwnedShuffleTask
+                    : NotionImportDiagnosticCodes.ModuleOwnedPhoodab;
                 skips.Add(Diagnostic(code, null, null, $"{table.SourceName} is owned outside Core."));
                 continue;
             }
 
             if (string.IsNullOrWhiteSpace(table.DatabaseNotionId) || string.IsNullOrWhiteSpace(database))
             {
-                deferred.Add(Diagnostic("authoritative-database-identity-required", null, null, $"{table.SourceName} cannot be imported from its filename alone."));
+                deferred.Add(Diagnostic(
+                    NotionImportDiagnosticCodes.AuthoritativeDatabaseIdentityRequired,
+                    null,
+                    null,
+                    $"{table.SourceName} cannot be imported from its filename alone."));
                 continue;
             }
 
@@ -128,13 +135,21 @@ public sealed class NotionImportUseCase(
             {
                 if (row.IsTemplate)
                 {
-                    skips.Add(Diagnostic("template", row.NotionId, null, "Template rows are not imported."));
+                    skips.Add(Diagnostic(
+                        NotionImportDiagnosticCodes.Template,
+                        row.NotionId,
+                        null,
+                        "Template rows are not imported."));
                     continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(row.NotionId))
                 {
-                    deferred.Add(Diagnostic("page-identity-required", null, null, "A row has no authoritative Notion page ID."));
+                    deferred.Add(Diagnostic(
+                        NotionImportDiagnosticCodes.PageIdentityRequired,
+                        null,
+                        null,
+                        "A row has no authoritative Notion page ID."));
                     continue;
                 }
 
@@ -175,7 +190,11 @@ public sealed class NotionImportUseCase(
         foreach (var conflict in conflicting)
         {
             candidates.Remove(conflict);
-            deferred.Add(Diagnostic("conflicting-page-id", conflict, null, "Repeated Notion page ID has conflicting content."));
+            deferred.Add(Diagnostic(
+                NotionImportDiagnosticCodes.ConflictingPageId,
+                conflict,
+                null,
+                "Repeated Notion page ID has conflicting content."));
         }
 
         records.AddRange(candidates.Values);
@@ -190,14 +209,20 @@ public sealed class NotionImportUseCase(
                 {
                     if (!recordsById.TryGetValue(targetId, out var targetRecord))
                     {
-                        unresolved.Add(Diagnostic("unresolved-link", record.PageNotionId, targetId,
+                        unresolved.Add(Diagnostic(
+                            NotionImportDiagnosticCodes.UnresolvedLink,
+                            record.PageNotionId,
+                            targetId,
                             $"{relation.FieldName} target is not eligible for import; no placeholder was created."));
                         continue;
                     }
 
                     if (!IsBrainItem(record.Target) || !IsBrainItem(targetRecord.Target))
                     {
-                        unresolved.Add(Diagnostic("relation-not-representable", record.PageNotionId, targetId,
+                        unresolved.Add(Diagnostic(
+                            NotionImportDiagnosticCodes.RelationNotRepresentable,
+                            record.PageNotionId,
+                            targetId,
                             $"{relation.FieldName} links records whose relationship cannot be represented by the current Core relation model; no relation was silently created."));
                     }
                 }
@@ -235,7 +260,7 @@ public sealed class NotionImportUseCase(
             if (!TryResolveRelationKind(relation.DeclaredType, out var kind))
             {
                 deferred.Add(Diagnostic(
-                    "unsupported-relation-type",
+                    NotionImportDiagnosticCodes.UnsupportedRelationType,
                     row.NotionId,
                     null,
                     $"{relation.FieldName} declares relation type '{relation.DeclaredType}', which mapping v1 cannot preserve safely."));
@@ -295,7 +320,10 @@ public sealed class NotionImportUseCase(
                 database.Equals("Global Tags", StringComparison.OrdinalIgnoreCase) ||
                 database.Equals("Tags", StringComparison.OrdinalIgnoreCase))
             {
-                skips.Add(Diagnostic("not-imported-by-v1-mapping", row.NotionId, null,
+                skips.Add(Diagnostic(
+                    NotionImportDiagnosticCodes.NotImportedByV1Mapping,
+                    row.NotionId,
+                    null,
                     "This auxiliary database has no direct Core target in mapping v1."));
                 return null;
             }
@@ -308,7 +336,7 @@ public sealed class NotionImportUseCase(
                 "ideas" => NotionImportTarget.Idea,
                 "journals" => NotionImportTarget.JournalEntry,
                 "captures" => NotionImportTarget.KnowledgeCapture,
-                _ => Defer("unsupported-database", row.NotionId, deferred),
+                _ => Defer(NotionImportDiagnosticCodes.UnsupportedDatabase, row.NotionId, deferred),
             };
         }
 
@@ -322,14 +350,21 @@ public sealed class NotionImportUseCase(
         };
         if (resolution is null)
         {
-            deferred.Add(Diagnostic("ambiguous-resource-classification-required", row.NotionId, null,
+            deferred.Add(Diagnostic(
+                NotionImportDiagnosticCodes.AmbiguousResourceClassificationRequired,
+                row.NotionId,
+                null,
                 "Choose Topic, Note, Artifact, or Exclude."));
             return null;
         }
 
         if (resolution == NotionResourceResolution.Exclude)
         {
-            skips.Add(Diagnostic("user-excluded", row.NotionId, null, "The Resource was explicitly excluded during review."));
+            skips.Add(Diagnostic(
+                NotionImportDiagnosticCodes.UserExcluded,
+                row.NotionId,
+                null,
+                "The Resource was explicitly excluded during review."));
             return null;
         }
 
@@ -372,7 +407,11 @@ public sealed class NotionImportUseCase(
                 }
 
                 records.Remove(record);
-                deferred.Add(Diagnostic("invalid-target-data", record.PageNotionId, null, reason));
+                deferred.Add(Diagnostic(
+                    NotionImportDiagnosticCodes.InvalidTargetData,
+                    record.PageNotionId,
+                    null,
+                    reason));
                 removed = true;
             }
         }
