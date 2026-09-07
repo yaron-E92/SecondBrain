@@ -14,8 +14,8 @@ public static class SecondBrainApplicationRegistration
         services.AddSingleton<GetApplicationStatusUseCase>();
         services.AddScoped<CoreKnowledgeUseCases>();
         services.AddScoped<ReviewUseCase>();
-        services.AddScoped<NotionParityAuditUseCase>();
-        services.AddScoped<NotionImportUseCase>();
+        services.AddSingleton<NotionParityAuditUseCase>();
+        services.AddSingleton<NotionImportUseCase>();
         return services;
     }
 }

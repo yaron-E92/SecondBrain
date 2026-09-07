@@ -168,6 +168,7 @@ public sealed class NotionImportUseCase(
         }
 
         records.AddRange(candidates.Values);
+        Preflight(records, deferred);
         var known = records.Select(record => record.PageNotionId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var unresolved = records.SelectMany(record => record.Relations.SelectMany(relation =>
                 relation.TargetNotionIds
@@ -261,4 +262,89 @@ public sealed class NotionImportUseCase(
 
     private static NotionImportDiagnostic Diagnostic(string code, string? source, string? target, string message) =>
         new(code, source, target, message);
+
+    private static void Preflight(
+        List<NotionImportRecord> records,
+        List<NotionImportDiagnostic> deferred)
+    {
+        bool removed;
+        do
+        {
+            removed = false;
+            var targets = records.Select(record => record.PageNotionId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var record in records.ToArray())
+            {
+                var reason = ValidationFailure(record, targets);
+                if (reason is null)
+                {
+                    continue;
+                }
+
+                records.Remove(record);
+                deferred.Add(Diagnostic("invalid-target-data", record.PageNotionId, null, reason));
+                removed = true;
+            }
+        }
+        while (removed);
+    }
+
+    private static string? ValidationFailure(
+        NotionImportRecord record,
+        IReadOnlySet<string> targets)
+    {
+        if (!Guid.TryParseExact(record.PageNotionId, "N", out _))
+        {
+            return "The authoritative page ID is invalid. Correct the export metadata and retry.";
+        }
+
+        if (string.IsNullOrWhiteSpace(Value(record, "name")))
+        {
+            return "A required name is missing. Correct the source and retry.";
+        }
+
+        if (!IsBrainItem(record.Target))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(Value(record, "content")))
+        {
+            return "Required content is missing. Correct the source and retry.";
+        }
+
+        var placementId = Value(record, "primaryNotionId") ?? Value(record, "placementNotionId");
+        var placementType = Value(record, "primaryType")?.Replace(" ", string.Empty, StringComparison.Ordinal);
+        if (string.IsNullOrWhiteSpace(placementId) || !targets.Contains(placementId.Replace("-", string.Empty, StringComparison.Ordinal)) ||
+            placementType is null || !(placementType.Equals("Project", StringComparison.OrdinalIgnoreCase) ||
+              placementType.Equals("Area", StringComparison.OrdinalIgnoreCase) ||
+              placementType.Equals("ResourceTopic", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "The primary placement cannot be resolved by Notion page ID. Correct the placement and retry.";
+        }
+
+        if (record.Target == NotionImportTarget.JournalEntry &&
+            !DateOnly.TryParse(Value(record, "entryDate"), out _))
+        {
+            return "A valid journal entry date is required. Correct the source and retry.";
+        }
+
+        if (record.Target == NotionImportTarget.KnowledgeCapture &&
+            (string.IsNullOrWhiteSpace(Value(record, "sourceUrl")) ||
+             string.IsNullOrWhiteSpace(Value(record, "sourceCitation"))))
+        {
+            return "Capture source URL and citation are required. Correct the source and retry.";
+        }
+
+        return null;
+    }
+
+    private static string? Value(NotionImportRecord record, string name) => record.Values
+        .FirstOrDefault(pair => Normalize(pair.Key) == Normalize(name)).Value;
+
+    private static string Normalize(string value) =>
+        value.Replace(" ", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+
+    private static bool IsBrainItem(NotionImportTarget target) => target is not
+        (NotionImportTarget.Project or NotionImportTarget.Area or NotionImportTarget.ResourceTopic);
 }

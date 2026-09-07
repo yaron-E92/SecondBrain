@@ -16,6 +16,8 @@ public sealed class AppShell : Shell
 
         Items.Add(new TabBar
         {
+            Title = "SecondBrain",
+            FlyoutDisplayOptions = FlyoutDisplayOptions.AsMultipleItems,
             Items =
             {
                 new ShellContent
@@ -33,7 +35,7 @@ public sealed class AppShell : Shell
                 new ShellContent
                 {
                     Route = "para",
-                    Title = "PARA",
+                    Title = "Browse",
                     Content = paraBrowserPage
                 },
                 new ShellContent
@@ -44,29 +46,55 @@ public sealed class AppShell : Shell
                 },
                 new ShellContent
                 {
-                    Route = "journals",
-                    Title = "Journals",
-                    Content = journalBrowserPage
-                },
-                new ShellContent
-                {
-                    Route = "editor",
-                    Title = "Editor",
-                    Content = coreEditorPage
-                },
-                new ShellContent
-                {
                     Route = "review",
                     Title = "Review",
                     Content = reviewPage
-                },
+                }
+            }
+        });
+
+        Items.Add(new FlyoutItem
+        {
+            Route = "journals",
+            Title = "Journals",
+            Items =
+            {
                 new ShellContent
                 {
-                    Route = "data-import",
-                    Title = "Data / Import",
+                    Title = "Journals",
+                    Content = journalBrowserPage
+                }
+            }
+        });
+
+        Items.Add(new FlyoutItem
+        {
+            Route = "data-import",
+            Title = "Data / Import",
+            Items =
+            {
+                new ShellContent
+                {
+                    Title = "Import",
                     Content = dataImportPage
                 }
             }
         });
+
+        var editor = new FlyoutItem
+        {
+            Route = "editor",
+            Title = "Editor",
+            FlyoutItemIsVisible = false,
+            Items =
+            {
+                new ShellContent
+                {
+                    Title = "Editor",
+                    Content = coreEditorPage
+                }
+            }
+        };
+        Items.Add(editor);
     }
 }

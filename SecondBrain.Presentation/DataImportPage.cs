@@ -1,4 +1,5 @@
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Layouts;
 using SecondBrain.Application.NotionAudit;
 using SecondBrain.Presentation.ViewModels;
 
@@ -20,6 +21,7 @@ public sealed class DataImportPage : ContentPage
         var selectFolder = new Button
         {
             Text = "Choose export folder",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditSelectFolder"
         };
@@ -28,6 +30,7 @@ public sealed class DataImportPage : ContentPage
         var selectArchive = new Button
         {
             Text = "Choose archive or manifest",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditSelectArchive"
         };
@@ -36,6 +39,7 @@ public sealed class DataImportPage : ContentPage
         var cancel = new Button
         {
             Text = "Cancel scan",
+            MinimumHeightRequest = 44,
             AutomationId = "NotionAuditCancel"
         };
         cancel.SetBinding(IsVisibleProperty, nameof(viewModel.CanCancel));
@@ -44,6 +48,7 @@ public sealed class DataImportPage : ContentPage
         var export = new Button
         {
             Text = "Export redacted report",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Start,
             AutomationId = "NotionAuditExportReport"
         };
@@ -53,6 +58,7 @@ public sealed class DataImportPage : ContentPage
         var confirm = new Button
         {
             Text = "Confirm import",
+            MinimumHeightRequest = 44,
             AutomationId = "NotionImportConfirm"
         };
         confirm.SetBinding(IsEnabledProperty, nameof(viewModel.CanConfirmImport));
@@ -62,6 +68,10 @@ public sealed class DataImportPage : ContentPage
         var progress = new ActivityIndicator { Color = Colors.DarkSlateBlue };
         progress.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsScanning));
         progress.SetBinding(IsVisibleProperty, nameof(viewModel.IsScanning));
+
+        var importProgress = new ActivityIndicator { Color = Colors.DarkSlateBlue };
+        importProgress.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsImporting));
+        importProgress.SetBinding(IsVisibleProperty, nameof(viewModel.IsImporting));
 
         var status = new Label { TextColor = Colors.DarkSlateGray };
         status.SetBinding(Label.TextProperty, nameof(viewModel.StatusMessage));
@@ -109,12 +119,16 @@ public sealed class DataImportPage : ContentPage
                         Text = "Preview what Core can represent before any import. Exported text stays local and this scan never mutates Core.",
                         TextColor = Colors.DarkSlateGray
                     },
-                    new HorizontalStackLayout
+                    new FlexLayout
                     {
-                        Spacing = 8,
+                        Direction = FlexDirection.Row,
+                        Wrap = FlexWrap.Wrap,
+                        JustifyContent = FlexJustify.Start,
+                        AlignItems = FlexAlignItems.Start,
                         Children = { selectFolder, selectArchive, cancel }
                     },
                     progress,
+                    importProgress,
                     status,
                     error,
                     report,
@@ -143,10 +157,21 @@ public sealed class DataImportPage : ContentPage
         foreach (var decision in plan.Deferred.Where(item =>
                      item.Code == "ambiguous-resource-classification-required" && item.SourceNotionId is not null))
         {
-            var choices = new HorizontalStackLayout { Spacing = 4 };
+            var choices = new FlexLayout
+            {
+                Direction = FlexDirection.Row,
+                Wrap = FlexWrap.Wrap,
+                JustifyContent = FlexJustify.Start
+            };
             foreach (var choice in Enum.GetValues<NotionResourceResolution>())
             {
-                var button = new Button { Text = choice.ToString() };
+                var button = new Button
+                {
+                    Text = choice.ToString(),
+                    MinimumHeightRequest = 44,
+                    MinimumWidthRequest = 72,
+                    Margin = new Thickness(0, 0, 8, 8)
+                };
                 button.Clicked += async (_, _) => await _viewModel.ResolveResourceAsync(decision.SourceNotionId!, choice);
                 choices.Children.Add(button);
             }
@@ -176,7 +201,11 @@ public sealed class DataImportPage : ContentPage
         _importReview.Children.Add(SectionHeading("Imported results"));
         foreach (var target in result.Targets.Take(8))
         {
-            var open = new Button { Text = $"Open {target.Title}" };
+            var open = new Button
+            {
+                Text = $"Open {target.Title}",
+                MinimumHeightRequest = 44
+            };
             open.Clicked += async (_, _) => await OpenImportedTargetAsync(target);
             _importReview.Children.Add(open);
         }
@@ -294,6 +323,7 @@ public sealed class DataImportPage : ContentPage
         var toggle = new Button
         {
             Text = $"Show details: {title}",
+            MinimumHeightRequest = 44,
             HorizontalOptions = LayoutOptions.Fill
         };
         toggle.Clicked += (_, _) =>
