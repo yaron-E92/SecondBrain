@@ -12,6 +12,7 @@ public static class NotionImportDiagnosticCodes
     public const string UnresolvedLink = "unresolved-link";
     public const string RelationNotRepresentable = "relation-not-representable";
     public const string UnsupportedRelationType = "unsupported-relation-type";
+    public const string InvalidRelationLifecycle = "invalid-relation-lifecycle";
     public const string NotImportedByV1Mapping = "not-imported-by-v1-mapping";
     public const string UnsupportedDatabase = "unsupported-database";
     public const string AmbiguousResourceClassificationRequired = "ambiguous-resource-classification-required";
