@@ -400,36 +400,36 @@ public sealed class NotionImportUseCase(
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var record in records.ToArray())
             {
-                var reason = ValidationFailure(record, targets);
-                if (reason is null)
+                var failure = ValidationFailure(record, targets);
+                if (failure is null)
                 {
                     continue;
                 }
 
                 records.Remove(record);
                 deferred.Add(Diagnostic(
-                    NotionImportDiagnosticCodes.InvalidTargetData,
+                    failure.Value.Code,
                     record.PageNotionId,
                     null,
-                    reason));
+                    failure.Value.Message));
                 removed = true;
             }
         }
         while (removed);
     }
 
-    private static string? ValidationFailure(
+    private static (string Code, string Message)? ValidationFailure(
         NotionImportRecord record,
         IReadOnlySet<string> targets)
     {
         if (!Guid.TryParseExact(record.PageNotionId, "N", out _))
         {
-            return "The authoritative page ID is invalid. Correct the export metadata and retry.";
+            return InvalidTarget("The authoritative page ID is invalid. Correct the export metadata and retry.");
         }
 
         if (string.IsNullOrWhiteSpace(Value(record, "name")))
         {
-            return "A required name is missing. Correct the source and retry.";
+            return InvalidTarget("A required name is missing. Correct the source and retry.");
         }
 
         if (!IsBrainItem(record.Target))
@@ -439,7 +439,7 @@ public sealed class NotionImportUseCase(
 
         if (string.IsNullOrWhiteSpace(Value(record, "content")))
         {
-            return "Required content is missing. Correct the source and retry.";
+            return InvalidTarget("Required content is missing. Correct the source and retry.");
         }
 
         var placementId = Value(record, "primaryNotionId") ?? Value(record, "placementNotionId");
@@ -449,24 +449,46 @@ public sealed class NotionImportUseCase(
               placementType.Equals("Area", StringComparison.OrdinalIgnoreCase) ||
               placementType.Equals("ResourceTopic", StringComparison.OrdinalIgnoreCase)))
         {
-            return "The primary placement cannot be resolved by Notion page ID. Correct the placement and retry.";
+            return InvalidTarget("The primary placement cannot be resolved by Notion page ID. Correct the placement and retry.");
+        }
+
+        foreach (var relation in record.Relations)
+        {
+            if (relation.Kind == NotionImportRelationKind.Derived &&
+                record.Target != NotionImportTarget.KnowledgeCapture)
+            {
+                return (
+                    NotionImportDiagnosticCodes.InvalidRelationLifecycle,
+                    "Derived relations require a Knowledge Capture source. Correct the relation type or source classification and retry.");
+            }
+
+            if (relation.Kind == NotionImportRelationKind.Provenance &&
+                record.Target != NotionImportTarget.ResourceArtifact)
+            {
+                return (
+                    NotionImportDiagnosticCodes.InvalidRelationLifecycle,
+                    "Provenance relations require a Resource Artifact source. Correct the relation type or source classification and retry.");
+            }
         }
 
         if (record.Target == NotionImportTarget.JournalEntry &&
             !DateOnly.TryParse(Value(record, "entryDate"), out _))
         {
-            return "A valid journal entry date is required. Correct the source and retry.";
+            return InvalidTarget("A valid journal entry date is required. Correct the source and retry.");
         }
 
         if (record.Target == NotionImportTarget.KnowledgeCapture &&
             (string.IsNullOrWhiteSpace(Value(record, "sourceUrl")) ||
              string.IsNullOrWhiteSpace(Value(record, "sourceCitation"))))
         {
-            return "Capture source URL and citation are required. Correct the source and retry.";
+            return InvalidTarget("Capture source URL and citation are required. Correct the source and retry.");
         }
 
         return null;
     }
+
+    private static (string Code, string Message) InvalidTarget(string message) =>
+        (NotionImportDiagnosticCodes.InvalidTargetData, message);
 
     private static string? Value(NotionImportRecord record, string name) => record.Values
         .FirstOrDefault(pair => Normalize(pair.Key) == Normalize(name)).Value;
