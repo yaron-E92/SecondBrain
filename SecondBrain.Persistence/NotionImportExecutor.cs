@@ -123,9 +123,20 @@ public sealed class NotionImportExecutor : INotionImportExecutor
             await transaction.RollbackAsync(CancellationToken.None);
             diagnostics.Add(new NotionImportDiagnostic(
                 "transaction-rolled-back", null, null,
-                $"Nothing was imported. Correct the source and retry. {exception.Message}"));
+                $"Nothing was imported. Correct the source and retry. {RootMessage(exception)}"));
             return new NotionImportResult(0, 0, existing.Count, 0, diagnostics, true);
         }
+    }
+
+    private static string RootMessage(Exception exception)
+    {
+        var current = exception;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return current.Message;
     }
 
     private static void AddTarget(
