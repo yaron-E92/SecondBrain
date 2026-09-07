@@ -161,9 +161,12 @@ public sealed partial class NotionParityAuditViewModel(
                 ErrorMessage = ImportResult.Diagnostics.LastOrDefault()?.Message ??
                     "The import was rolled back. Correct the source and retry.";
             }
+
             StatusMessage = ImportResult.RolledBack
                 ? "Import failed and was rolled back. Review the report and retry."
-                : $"Import complete: {ImportResult.Created} created, {ImportResult.Updated} updated, {ImportResult.Skipped} skipped, {ImportResult.Conflicted} conflicted.";
+                : ImportResult.BlockedByConflicts
+                    ? $"Import blocked: {ImportResult.Conflicted} changed-source conflict(s). No application data was changed."
+                    : $"Import complete: {ImportResult.Created} created, {ImportResult.Updated} updated, {ImportResult.Skipped} skipped, {ImportResult.Conflicted} conflicted.";
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException)
         {
