@@ -10,9 +10,20 @@ public sealed class AppShell : Shell
         JournalBrowserPage journalBrowserPage,
         CoreEditorPage coreEditorPage,
         ReviewPage reviewPage,
+        SettingsPage settingsPage,
         DataImportPage dataImportPage)
     {
         Title = "SecondBrain";
+
+        var settings = new ToolbarItem
+        {
+            Text = "Settings",
+            Order = ToolbarItemOrder.Primary,
+            Priority = 0,
+            AutomationId = "GlobalSettings"
+        };
+        settings.Clicked += async (_, _) => await GoToAsync("//settings");
+        ToolbarItems.Add(settings);
 
         Items.Add(new TabBar
         {
@@ -69,8 +80,23 @@ public sealed class AppShell : Shell
 
         Items.Add(new FlyoutItem
         {
+            Route = "settings",
+            Title = "Settings",
+            Items =
+            {
+                new ShellContent
+                {
+                    Title = "Settings",
+                    Content = settingsPage
+                }
+            }
+        });
+
+        Items.Add(new FlyoutItem
+        {
             Route = "data-import",
             Title = "Data / Import",
+            FlyoutItemIsVisible = false,
             Items =
             {
                 new ShellContent
