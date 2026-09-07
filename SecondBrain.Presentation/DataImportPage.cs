@@ -198,6 +198,18 @@ public sealed class DataImportPage : ContentPage
             return;
         }
 
+        if (result.BlockedByConflicts)
+        {
+            _importReview.Children.Add(SectionHeading("Import blocked by changed source"));
+            foreach (var diagnostic in result.Diagnostics.Where(item =>
+                         item.Code is "changed-source-conflict" or "import-blocked-by-conflicts"))
+            {
+                _importReview.Children.Add(ExpandableCard("Conflict diagnostic", diagnostic.Message));
+            }
+
+            return;
+        }
+
         _importReview.Children.Add(SectionHeading("Imported results"));
         foreach (var target in result.Targets.Take(8))
         {
