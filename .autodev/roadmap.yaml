@@ -1,11 +1,11 @@
 version: 1
 priority:
-  # Product correction gate: finish the already-landed import journey, then replace
-  # the transitional Shell/IA before adding more substantial presentation work.
+  # Product correction gate: replace the transitional Shell/IA first, then finish
+  # the already-landed import journey against that stable product composition.
   # UX/presentation issues are not product-complete from CI alone: their named
   # running-product journey must be exercised against the pinned UX artifact.
-  - issue: 43
   - issue: 125
+  - issue: 43
 
   # Standalone SecondBrain value and data safety come before ecosystem breadth.
   # These journeys should build on #125's stable navigation/settings composition.
