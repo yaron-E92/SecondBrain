@@ -155,7 +155,7 @@ public sealed class DataImportPage : ContentPage
             TextColor = Colors.Black
         });
         foreach (var decision in plan.Deferred.Where(item =>
-                     item.Code == "ambiguous-resource-classification-required" && item.SourceNotionId is not null))
+                     item.Code == NotionImportDiagnosticCodes.AmbiguousResourceClassificationRequired && item.SourceNotionId is not null))
         {
             var choices = new FlexLayout
             {
@@ -202,7 +202,8 @@ public sealed class DataImportPage : ContentPage
         {
             _importReview.Children.Add(SectionHeading("Import blocked by changed source"));
             foreach (var diagnostic in result.Diagnostics.Where(item =>
-                         item.Code is "changed-source-conflict" or "import-blocked-by-conflicts"))
+                         item.Code is NotionImportDiagnosticCodes.ChangedSourceConflict or
+                             NotionImportDiagnosticCodes.ImportBlockedByConflicts))
             {
                 _importReview.Children.Add(ExpandableCard("Conflict diagnostic", diagnostic.Message));
             }
