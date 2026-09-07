@@ -54,7 +54,23 @@ public sealed class NotionImportExecutor : INotionImportExecutor
             diagnostics.AddRange(conflicts.Select(record => new NotionImportDiagnostic(
                 "changed-source-conflict", record.PageNotionId, null,
                 "This Notion page was imported previously with different content; existing Core data was preserved.")));
-            return new NotionImportResult(0, 0, existing.Count - conflicts.Length, conflicts.Length, diagnostics);
+            diagnostics.Add(new NotionImportDiagnostic(
+                "import-blocked-by-conflicts", null, null,
+                $"No changes were applied because {conflicts.Length} previously imported source record(s) changed. Resolve the conflicts and preview again."));
+            var conflictIds = conflicts.Select(record => record.PageNotionId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return new NotionImportResult(
+                0,
+                0,
+                plan.Records.Count - conflicts.Length,
+                conflicts.Length,
+                diagnostics)
+            {
+                BlockedByConflicts = true,
+                Targets = ResultTargets(
+                    plan.Records.Where(record => !conflictIds.Contains(record.PageNotionId)),
+                    existing)
+            };
         }
 
         var pending = plan.Records.Where(record => !existing.ContainsKey(record.PageNotionId)).ToArray();
@@ -89,7 +105,7 @@ public sealed class NotionImportExecutor : INotionImportExecutor
                 });
             }
 
-            await AddRelationsAsync(context, pending, targets, cancellationToken);
+            await AddRelationsAsync(context, pending, targets, diagnostics, cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new NotionImportResult(pending.Length, 0, existing.Count, 0, diagnostics)
@@ -164,6 +180,7 @@ public sealed class NotionImportExecutor : INotionImportExecutor
         SecondBrainDbContext context,
         IEnumerable<NotionImportRecord> records,
         IReadOnlyDictionary<string, Guid> targets,
+        List<NotionImportDiagnostic> diagnostics,
         CancellationToken cancellationToken)
     {
         var targetIds = targets.Values.ToArray();
@@ -176,22 +193,60 @@ public sealed class NotionImportExecutor : INotionImportExecutor
         foreach (var record in records.Where(record => IsBrainItem(record.Target)))
         {
             var source = targets[record.PageNotionId];
-            foreach (var target in record.Relations.SelectMany(relation => relation.TargetNotionIds)
-                         .Where(targets.ContainsKey).Distinct(StringComparer.OrdinalIgnoreCase))
+            var added = new HashSet<(Guid TargetId, BrainItemRelationKind Kind)>();
+            foreach (var relation in record.Relations)
             {
-                var targetId = targets[target];
-                if (source != targetId && brainItemIds.Contains(targetId))
+                var kind = RelationKind(relation.Kind);
+                foreach (var target in relation.TargetNotionIds
+                             .Where(targets.ContainsKey)
+                             .Distinct(StringComparer.OrdinalIgnoreCase))
                 {
+                    var targetId = targets[target];
+                    if (source == targetId)
+                    {
+                        continue;
+                    }
+
+                    if (!brainItemIds.Contains(targetId))
+                    {
+                        if (!diagnostics.Any(diagnostic =>
+                                diagnostic.Code == "relation-not-representable" &&
+                                string.Equals(diagnostic.SourceNotionId, record.PageNotionId, StringComparison.OrdinalIgnoreCase) &&
+                                string.Equals(diagnostic.TargetNotionId, target, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            diagnostics.Add(new NotionImportDiagnostic(
+                                "relation-not-representable",
+                                record.PageNotionId,
+                                target,
+                                $"{relation.FieldName} targets a Core context rather than a BrainItem; the relation was reported instead of silently discarded."));
+                        }
+
+                        continue;
+                    }
+
+                    if (!added.Add((targetId, kind)))
+                    {
+                        continue;
+                    }
+
                     context.BrainItemRelations.Add(new BrainItemRelationRow
                     {
                         SourceId = source,
                         TargetId = targetId,
-                        Kind = BrainItemRelationKind.Contextual,
+                        Kind = kind,
                     });
                 }
             }
         }
     }
+
+    private static BrainItemRelationKind RelationKind(NotionImportRelationKind kind) => kind switch
+    {
+        NotionImportRelationKind.Contextual => BrainItemRelationKind.Contextual,
+        NotionImportRelationKind.Derived => BrainItemRelationKind.Derived,
+        NotionImportRelationKind.Provenance => BrainItemRelationKind.Provenance,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
 
     private static void ApplyKindFields(BrainItemRow row, NotionImportRecord record)
     {
