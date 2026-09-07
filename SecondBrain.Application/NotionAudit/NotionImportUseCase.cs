@@ -27,7 +27,7 @@ public sealed record NotionImportRecord(
     NotionImportTarget Target,
     string ContentFingerprint,
     IReadOnlyDictionary<string, string> Values,
-    IReadOnlyList<NotionExportRelation> Relations);
+    IReadOnlyList<NotionImportRelation> Relations);
 
 public sealed record NotionImportDiagnostic(
     string Code,
@@ -54,6 +54,8 @@ public sealed record NotionImportResult(
     bool RolledBack = false)
 {
     public IReadOnlyList<NotionImportedTarget> Targets { get; init; } = [];
+
+    public bool BlockedByConflicts { get; init; }
 }
 
 public sealed record NotionImportedTarget(
@@ -108,7 +110,10 @@ public sealed class NotionImportUseCase(
 
             if (Excluded.Contains(database ?? string.Empty))
             {
-                var code = database is "Tasks" or "Chores" ? "module-owned-shuffletask" : "module-owned-phoodab";
+                var isShuffleTask = database is not null &&
+                    (database.Equals("Tasks", StringComparison.OrdinalIgnoreCase) ||
+                     database.Equals("Chores", StringComparison.OrdinalIgnoreCase));
+                var code = isShuffleTask ? "module-owned-shuffletask" : "module-owned-phoodab";
                 skips.Add(Diagnostic(code, null, null, $"{table.SourceName} is owned outside Core."));
                 continue;
             }
@@ -139,6 +144,12 @@ public sealed class NotionImportUseCase(
                     continue;
                 }
 
+                var relations = ResolveRelations(row, deferred);
+                if (relations is null)
+                {
+                    continue;
+                }
+
                 var record = new NotionImportRecord(
                     table.DatabaseNotionId,
                     row.NotionId,
@@ -146,7 +157,7 @@ public sealed class NotionImportUseCase(
                     target.Value,
                     row.ContentFingerprint ?? string.Empty,
                     row.Values,
-                    row.Relations);
+                    relations);
                 if (candidates.TryGetValue(row.NotionId, out var existing))
                 {
                     if (!string.Equals(existing.ContentFingerprint, record.ContentFingerprint, StringComparison.Ordinal))
@@ -169,13 +180,30 @@ public sealed class NotionImportUseCase(
 
         records.AddRange(candidates.Values);
         Preflight(records, deferred);
-        var known = records.Select(record => record.PageNotionId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var unresolved = records.SelectMany(record => record.Relations.SelectMany(relation =>
-                relation.TargetNotionIds
-                    .Where(target => !known.Contains(target))
-                    .Select(target => Diagnostic("unresolved-link", record.PageNotionId, target,
-                        $"{relation.FieldName} target is not eligible for import; no placeholder was created."))))
-            .ToArray();
+        var recordsById = records.ToDictionary(record => record.PageNotionId, StringComparer.OrdinalIgnoreCase);
+        var unresolved = new List<NotionImportDiagnostic>();
+        foreach (var record in records)
+        {
+            foreach (var relation in record.Relations)
+            {
+                foreach (var targetId in relation.TargetNotionIds.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!recordsById.TryGetValue(targetId, out var targetRecord))
+                    {
+                        unresolved.Add(Diagnostic("unresolved-link", record.PageNotionId, targetId,
+                            $"{relation.FieldName} target is not eligible for import; no placeholder was created."));
+                        continue;
+                    }
+
+                    if (!IsBrainItem(record.Target) || !IsBrainItem(targetRecord.Target))
+                    {
+                        unresolved.Add(Diagnostic("relation-not-representable", record.PageNotionId, targetId,
+                            $"{relation.FieldName} links records whose relationship cannot be represented by the current Core relation model; no relation was silently created."));
+                    }
+                }
+            }
+        }
+
         return new NotionImportPlan("1.0", records, skips, deferred, unresolved);
     }
 
@@ -190,6 +218,68 @@ public sealed class NotionImportUseCase(
         }
 
         return executor.ExecuteAsync(plan, cancellationToken);
+    }
+
+    private static IReadOnlyList<NotionImportRelation>? ResolveRelations(
+        NotionExportRowMetadata row,
+        List<NotionImportDiagnostic> deferred)
+    {
+        var result = new List<NotionImportRelation>();
+        foreach (var relation in row.Relations)
+        {
+            if (IsPlacementReference(relation.FieldName))
+            {
+                continue;
+            }
+
+            if (!TryResolveRelationKind(relation.DeclaredType, out var kind))
+            {
+                deferred.Add(Diagnostic(
+                    "unsupported-relation-type",
+                    row.NotionId,
+                    null,
+                    $"{relation.FieldName} declares relation type '{relation.DeclaredType}', which mapping v1 cannot preserve safely."));
+                return null;
+            }
+
+            result.Add(new NotionImportRelation(relation.FieldName, kind, relation.TargetNotionIds));
+        }
+
+        return result;
+    }
+
+    private static bool TryResolveRelationKind(
+        string? declaredType,
+        out NotionImportRelationKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(declaredType))
+        {
+            kind = NotionImportRelationKind.Contextual;
+            return true;
+        }
+
+        switch (Normalize(declaredType).Replace("-", string.Empty, StringComparison.Ordinal))
+        {
+            case "related":
+            case "contextual":
+                kind = NotionImportRelationKind.Contextual;
+                return true;
+            case "derived":
+                kind = NotionImportRelationKind.Derived;
+                return true;
+            case "provenance":
+                kind = NotionImportRelationKind.Provenance;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private static bool IsPlacementReference(string fieldName)
+    {
+        var normalized = Normalize(fieldName);
+        return normalized is "primarynotionid" or "placementnotionid" or "primaryplacement" or "placement";
     }
 
     private static NotionImportTarget? ResolveTarget(
