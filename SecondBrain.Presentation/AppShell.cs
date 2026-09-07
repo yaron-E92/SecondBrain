@@ -15,6 +15,16 @@ public sealed class AppShell : Shell
     {
         Title = "SecondBrain";
 
+        var settings = new ToolbarItem
+        {
+            Text = "Settings",
+            Order = ToolbarItemOrder.Primary,
+            Priority = 0,
+            AutomationId = "GlobalSettings"
+        };
+        settings.Clicked += async (_, _) => await GoToAsync("//settings");
+        ToolbarItems.Add(settings);
+
         Items.Add(new TabBar
         {
             Title = "SecondBrain",
