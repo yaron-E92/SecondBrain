@@ -21,8 +21,10 @@ public static class SecondBrainPersistenceRegistration
         services.AddScoped<ICoreKnowledgeRepository>(
             provider => provider.GetRequiredService<SecondBrainDataStore>());
         services.AddScoped<ICoreSearchQueryService, CoreSearchQueryService>();
-        services.AddScoped<INotionExportReader, NotionExportReader>();
-        services.AddScoped<INotionImportExecutor, NotionImportExecutor>();
+        services.AddSingleton<INotionExportReader, NotionExportReader>();
+        services.AddSingleton<INotionImportExecutor>(provider =>
+            new NotionImportExecutor(
+                provider.GetRequiredService<IDbContextFactory<SecondBrainDbContext>>()));
         services.AddSingleton<SecondBrainPersistenceInitializer>();
         return services;
     }

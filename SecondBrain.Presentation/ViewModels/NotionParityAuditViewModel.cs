@@ -62,15 +62,23 @@ public sealed partial class NotionParityAuditViewModel(
         IsScanning = true;
         ErrorMessage = null;
         StatusMessage = "Scanning locally… No application data is being changed.";
+        var sourceChanged = !string.Equals(_sourcePath, sourcePath, StringComparison.Ordinal);
+        IReadOnlyDictionary<string, NotionResourceResolution> resolutions = sourceChanged
+            ? new Dictionary<string, NotionResourceResolution>(StringComparer.OrdinalIgnoreCase)
+            : _resourceResolutions;
         try
         {
             var report = await auditUseCase.AuditAsync(sourcePath, cancellationToken);
             var importPlan = importUseCase is null
                 ? null
-                : await importUseCase.PreviewAsync(sourcePath, _resourceResolutions, cancellationToken);
+                : await importUseCase.PreviewAsync(sourcePath, resolutions, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (ReferenceEquals(_scanCancellation, scanCancellation))
             {
+                if (sourceChanged)
+                {
+                    _resourceResolutions.Clear();
+                }
                 _sourcePath = sourcePath;
                 Report = report;
                 ImportPlan = importPlan;
@@ -148,6 +156,11 @@ public sealed partial class NotionParityAuditViewModel(
         try
         {
             ImportResult = await importUseCase.ConfirmAsync(plan);
+            if (ImportResult.RolledBack)
+            {
+                ErrorMessage = ImportResult.Diagnostics.LastOrDefault()?.Message ??
+                    "The import was rolled back. Correct the source and retry.";
+            }
             StatusMessage = ImportResult.RolledBack
                 ? "Import failed and was rolled back. Review the report and retry."
                 : $"Import complete: {ImportResult.Created} created, {ImportResult.Updated} updated, {ImportResult.Skipped} skipped, {ImportResult.Conflicted} conflicted.";

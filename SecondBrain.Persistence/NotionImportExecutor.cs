@@ -5,13 +5,41 @@ using SecondBrain.Domain.ValueObjects;
 
 namespace SecondBrain.Persistence;
 
-public sealed class NotionImportExecutor(SecondBrainDbContext context) : INotionImportExecutor
+public sealed class NotionImportExecutor : INotionImportExecutor
 {
+    private readonly IDbContextFactory<SecondBrainDbContext>? _contextFactory;
+    private readonly SecondBrainDbContext? _suppliedContext;
+
+    public NotionImportExecutor(IDbContextFactory<SecondBrainDbContext> contextFactory)
+    {
+        _contextFactory = contextFactory;
+    }
+
+    // Kept for focused tests and callers that explicitly own a context.
+    public NotionImportExecutor(SecondBrainDbContext context)
+    {
+        _suppliedContext = context;
+    }
+
     public async Task<NotionImportResult> ExecuteAsync(
         NotionImportPlan plan,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        if (_suppliedContext is not null)
+        {
+            return await ExecuteCoreAsync(_suppliedContext, plan, cancellationToken);
+        }
+
+        await using var context = await _contextFactory!.CreateDbContextAsync(cancellationToken);
+        return await ExecuteCoreAsync(context, plan, cancellationToken);
+    }
+
+    private static async Task<NotionImportResult> ExecuteCoreAsync(
+        SecondBrainDbContext context,
+        NotionImportPlan plan,
+        CancellationToken cancellationToken)
+    {
         var diagnostics = new List<NotionImportDiagnostic>(plan.UnresolvedLinks);
         var sourceIds = plan.Records.Select(record => record.PageNotionId).ToArray();
         var existing = await context.NotionImportProvenance
@@ -49,7 +77,7 @@ public sealed class NotionImportExecutor(SecondBrainDbContext context) : INotion
                 StringComparer.OrdinalIgnoreCase);
             foreach (var record in pending)
             {
-                AddTarget(record, targets);
+                AddTarget(context, record, targets);
                 context.NotionImportProvenance.Add(new NotionImportProvenanceRow
                 {
                     DatabaseNotionId = record.DatabaseNotionId,
@@ -61,7 +89,7 @@ public sealed class NotionImportExecutor(SecondBrainDbContext context) : INotion
                 });
             }
 
-            AddRelations(pending, targets);
+            await AddRelationsAsync(context, pending, targets, cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new NotionImportResult(pending.Length, 0, existing.Count, 0, diagnostics)
@@ -80,7 +108,10 @@ public sealed class NotionImportExecutor(SecondBrainDbContext context) : INotion
         }
     }
 
-    private void AddTarget(NotionImportRecord record, IReadOnlyDictionary<string, Guid> targets)
+    private static void AddTarget(
+        SecondBrainDbContext context,
+        NotionImportRecord record,
+        IReadOnlyDictionary<string, Guid> targets)
     {
         var id = targets[record.PageNotionId];
         var name = Required(record, "name");
@@ -129,8 +160,19 @@ public sealed class NotionImportExecutor(SecondBrainDbContext context) : INotion
         }
     }
 
-    private void AddRelations(IEnumerable<NotionImportRecord> records, IReadOnlyDictionary<string, Guid> targets)
+    private static async Task AddRelationsAsync(
+        SecondBrainDbContext context,
+        IEnumerable<NotionImportRecord> records,
+        IReadOnlyDictionary<string, Guid> targets,
+        CancellationToken cancellationToken)
     {
+        var targetIds = targets.Values.ToArray();
+        var brainItemIds = (await context.BrainItems
+            .Where(item => targetIds.Contains(item.Id))
+            .Select(item => item.Id)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+        brainItemIds.UnionWith(context.BrainItems.Local.Select(item => item.Id));
         foreach (var record in records.Where(record => IsBrainItem(record.Target)))
         {
             var source = targets[record.PageNotionId];
@@ -138,7 +180,7 @@ public sealed class NotionImportExecutor(SecondBrainDbContext context) : INotion
                          .Where(targets.ContainsKey).Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 var targetId = targets[target];
-                if (source != targetId && context.BrainItems.Local.Any(item => item.Id == targetId))
+                if (source != targetId && brainItemIds.Contains(targetId))
                 {
                     context.BrainItemRelations.Add(new BrainItemRelationRow
                     {
