@@ -85,10 +85,11 @@ public sealed class NotionImportExecutorTests
 
             var result = await executor.ExecuteAsync(plan);
             var kinds = await ReadIntegerColumnAsync(context, "SELECT Kind FROM BrainItemRelations ORDER BY Kind");
+            var diagnostics = string.Join(" | ", result.Diagnostics.Select(item => $"{item.Code}: {item.Message}"));
 
             Assert.Multiple(() =>
             {
-                Assert.That(result.RolledBack, Is.False);
+                Assert.That(result.RolledBack, Is.False, diagnostics);
                 Assert.That(result.Created, Is.EqualTo(5));
                 Assert.That(kinds, Is.EquivalentTo(new[] { 0, 1, 2 }));
             });
