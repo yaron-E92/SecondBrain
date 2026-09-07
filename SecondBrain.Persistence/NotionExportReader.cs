@@ -254,10 +254,17 @@ public sealed class NotionExportReader : INotionExportReader
     private static bool IsRelationshipField(string fieldName)
     {
         var normalized = fieldName.Replace(" ", string.Empty, StringComparison.Ordinal);
+        var canonical = NormalizeField(fieldName);
+        if (canonical.EndsWith("relationtype", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         return normalized.Contains("relation", StringComparison.OrdinalIgnoreCase) ||
             (!normalized.Equals("notionid", StringComparison.OrdinalIgnoreCase) &&
              (normalized.EndsWith("notionid", StringComparison.OrdinalIgnoreCase) ||
               normalized.EndsWith("notionids", StringComparison.OrdinalIgnoreCase))) ||
+            normalized.Equals("tags", StringComparison.OrdinalIgnoreCase) ||
             normalized.Equals("links", StringComparison.OrdinalIgnoreCase) ||
             normalized.Equals("placement", StringComparison.OrdinalIgnoreCase) ||
             normalized.Equals("primaryplacement", StringComparison.OrdinalIgnoreCase) ||
