@@ -227,7 +227,7 @@ public sealed class NotionImportUseCase(
         var result = new List<NotionImportRelation>();
         foreach (var relation in row.Relations)
         {
-            if (IsPlacementReference(relation.FieldName))
+            if (IsNonImportedRelationField(relation.FieldName))
             {
                 continue;
             }
@@ -276,10 +276,10 @@ public sealed class NotionImportUseCase(
         }
     }
 
-    private static bool IsPlacementReference(string fieldName)
+    private static bool IsNonImportedRelationField(string fieldName)
     {
         var normalized = Normalize(fieldName);
-        return normalized is "primarynotionid" or "placementnotionid" or "primaryplacement" or "placement";
+        return normalized is "primarynotionid" or "placementnotionid" or "primaryplacement" or "placement" or "tags";
     }
 
     private static NotionImportTarget? ResolveTarget(
