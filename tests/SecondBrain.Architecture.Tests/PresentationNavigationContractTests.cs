@@ -80,13 +80,14 @@ public sealed class PresentationNavigationContractTests
     [Test]
     public void DesktopRail_UsesExplicitReadableInactiveText()
     {
-        var source = ReadPresentationFile("AppShell.cs");
+        var shell = ReadPresentationFile("AppShell.cs");
+        var visual = ReadPresentationFile("SecondBrainVisual.cs");
 
         Assert.Multiple(() =>
         {
-            Assert.That(source, Does.Contain("NavigationText = Color.FromArgb(\"#D9E4EE\")"));
-            Assert.That(source, Does.Contain("Shell.SetUnselectedColor(this, NavigationText)"));
-            Assert.That(source, Does.Contain("Shell.SetUnselectedColor(item, NavigationText)"));
+            Assert.That(visual, Does.Contain("NavigationText = Color.FromArgb(\"#D9E4EE\")"));
+            Assert.That(shell, Does.Contain("Shell.SetUnselectedColor(this, SecondBrainVisual.NavigationText)"));
+            Assert.That(shell, Does.Contain("Shell.SetUnselectedColor(item, SecondBrainVisual.NavigationText)"));
         });
     }
 
