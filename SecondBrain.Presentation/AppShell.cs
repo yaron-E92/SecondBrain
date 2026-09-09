@@ -2,8 +2,6 @@ namespace SecondBrain.Presentation;
 
 public sealed class AppShell : Shell
 {
-    private static readonly Color NavigationText = Color.FromArgb("#D9E4EE");
-
     public AppShell(
         MainPage mainPage,
         InboxPage inboxPage,
@@ -23,7 +21,7 @@ public sealed class AppShell : Shell
         Shell.SetBackgroundColor(this, SecondBrainVisual.Navigation);
         Shell.SetForegroundColor(this, Colors.White);
         Shell.SetTitleColor(this, Colors.White);
-        Shell.SetUnselectedColor(this, NavigationText);
+        Shell.SetUnselectedColor(this, SecondBrainVisual.NavigationText);
 
         var isDesktop = DeviceInfo.Idiom == DeviceIdiom.Desktop;
         FlyoutBehavior = isDesktop
@@ -121,7 +119,7 @@ public sealed class AppShell : Shell
                 {
                     Text = "Capture → Process → Find → Review",
                     FontSize = 12,
-                    TextColor = NavigationText,
+                    TextColor = SecondBrainVisual.NavigationMuted,
                 },
                 capture,
             },
@@ -181,7 +179,7 @@ public sealed class AppShell : Shell
         };
         Shell.SetForegroundColor(item, Colors.White);
         Shell.SetTitleColor(item, Colors.White);
-        Shell.SetUnselectedColor(item, NavigationText);
+        Shell.SetUnselectedColor(item, SecondBrainVisual.NavigationText);
         return item;
     }
 
