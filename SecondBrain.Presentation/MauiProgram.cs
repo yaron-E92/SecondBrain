@@ -29,7 +29,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<InboxProcessViewModel>();
         builder.Services.AddSingleton<ParaBrowserViewModel>();
         builder.Services.AddSingleton<CoreSearchViewModel>();
-        builder.Services.AddSingleton<CoreEditorViewModel>();
+        builder.Services.AddTransient<CoreEditorViewModel>();
         builder.Services.AddSingleton<JournalBrowserViewModel>();
         builder.Services.AddSingleton<ReviewViewModel>();
         builder.Services.AddSingleton<NotionParityAuditViewModel>();
@@ -39,7 +39,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<InboxProcessPage>();
         builder.Services.AddSingleton<ParaBrowserPage>();
         builder.Services.AddSingleton<CoreSearchPage>();
-        builder.Services.AddSingleton<CoreEditorPage>();
+        builder.Services.AddSingleton<CoreCreatePage>();
+        builder.Services.AddSingleton<CoreEditPage>();
         builder.Services.AddSingleton<JournalBrowserPage>();
         builder.Services.AddSingleton<ReviewPage>();
         builder.Services.AddSingleton<SettingsPage>();
