@@ -127,6 +127,16 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
+        if (string.Equals(Value(query, "mode"), "create", StringComparison.OrdinalIgnoreCase))
+        {
+            _pendingItemId = null;
+            var forwarded = query
+                .Where(pair => !string.Equals(pair.Key, "mode", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//create", forwarded));
+            return;
+        }
+
         _pendingItemId = TryId(query, "itemId");
         _returnRoute = NormalizeReturnRoute(Value(query, "returnRoute"));
     }
