@@ -7,6 +7,8 @@ internal static class SecondBrainVisual
     internal static readonly Color Background = Color.FromArgb("#F5F7FA");
     internal static readonly Color Surface = Colors.White;
     internal static readonly Color Navigation = Color.FromArgb("#17283A");
+    internal static readonly Color NavigationText = Color.FromArgb("#D9E4EE");
+    internal static readonly Color NavigationMuted = Color.FromArgb("#B8C6D3");
     internal static readonly Color Accent = Color.FromArgb("#315C91");
     internal static readonly Color AccentSoft = Color.FromArgb("#E9F0F8");
     internal static readonly Color Ink = Color.FromArgb("#182026");
