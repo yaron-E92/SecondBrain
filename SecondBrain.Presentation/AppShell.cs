@@ -30,6 +30,7 @@ public sealed class AppShell : Shell
 
         if (isDesktop)
         {
+            ItemTemplate = DesktopNavigationItemTemplate();
             ConfigureDesktopRail(mainPage);
             HideDesktopChrome(
                 mainPage,
@@ -82,6 +83,26 @@ public sealed class AppShell : Shell
             Shell.SetNavBarIsVisible(page, false);
         }
     }
+
+    private static DataTemplate DesktopNavigationItemTemplate() =>
+        new(() =>
+        {
+            var title = new Label
+            {
+                FontSize = 15,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = SecondBrainVisual.NavigationText,
+                VerticalTextAlignment = TextAlignment.Center,
+            };
+            title.SetBinding(Label.TextProperty, nameof(BaseShellItem.Title));
+
+            return new Grid
+            {
+                Padding = new Thickness(18, 10),
+                MinimumHeightRequest = 44,
+                Children = { title },
+            };
+        });
 
     private void ConfigureDesktopRail(MainPage mainPage)
     {
