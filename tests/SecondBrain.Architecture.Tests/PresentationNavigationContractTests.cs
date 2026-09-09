@@ -72,10 +72,26 @@ public sealed class PresentationNavigationContractTests
             Assert.That(create, Does.Not.Contain("Existing item"));
             Assert.That(create, Does.Contain("ResetSurface();"),
                 "The contextual creation page must reset drafts and controls between route entries.");
+            Assert.That(create, Does.Contain("if (_pendingPlacement is not null || _deriveFromId is not null)"),
+                "A preselected type alone must not silently choose the first available home.");
 
             Assert.That(edit, Does.Contain("Title = \"Edit knowledge\""));
             Assert.That(edit, Does.Contain("Creation is a separate flow."));
             Assert.That(edit, Does.Not.Contain("New item"));
+        });
+    }
+
+    [Test]
+    public void LegacyCreateLinks_AreForwardedDeterministically()
+    {
+        var edit = ReadPresentationFile("CoreEditPage.cs");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(edit, Does.Contain("_pendingCreateForward"));
+            Assert.That(edit, Does.Contain("await Shell.Current.GoToAsync(\"//create\", forward);"));
+            Assert.That(edit, Does.Not.Contain("Dispatcher.Dispatch(async"),
+                "Route forwarding must not be fire-and-forget from ApplyQueryAttributes.");
         });
     }
 
@@ -90,6 +106,9 @@ public sealed class PresentationNavigationContractTests
             Assert.That(visual, Does.Contain("NavigationText = Color.FromArgb(\"#D9E4EE\")"));
             Assert.That(shell, Does.Contain("Shell.SetUnselectedColor(this, SecondBrainVisual.NavigationText)"));
             Assert.That(shell, Does.Contain("Shell.SetUnselectedColor(item, SecondBrainVisual.NavigationText)"));
+            Assert.That(shell, Does.Contain("ItemTemplate = DesktopNavigationItemTemplate();"),
+                "Windows ignored the Shell unselected-color hint in runtime screenshots; the rail now needs an explicit item template.");
+            Assert.That(shell, Does.Contain("TextColor = SecondBrainVisual.NavigationText"));
         });
     }
 
