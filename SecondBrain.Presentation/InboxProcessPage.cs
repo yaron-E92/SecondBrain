@@ -1,3 +1,4 @@
+using Microsoft.Maui.Layouts;
 using SecondBrain.Domain.ValueObjects;
 using SecondBrain.Presentation.ViewModels;
 
@@ -158,17 +159,17 @@ public sealed class InboxProcessPage : ContentPage, IQueryAttributable
                 Children = { body },
             },
         };
-        Grid.SetColumn(body, 1);
-
-        SizeChanged += (_, _) =>
+        if (Content is ScrollView { Content: Grid host })
         {
-            if (Width < 900 && Content is ScrollView { Content: Grid grid })
+            Grid.SetColumn(body, 1);
+            host.SizeChanged += (_, _) =>
             {
-                grid.ColumnDefinitions[0].Width = 0;
-                grid.ColumnDefinitions[1].Width = GridLength.Star;
-                grid.ColumnDefinitions[2].Width = 0;
-            }
-        };
+                var wide = host.Width >= 900;
+                host.ColumnDefinitions[0].Width = wide ? GridLength.Star : 0;
+                host.ColumnDefinitions[1].Width = wide ? new GridLength(820) : GridLength.Star;
+                host.ColumnDefinitions[2].Width = wide ? GridLength.Star : 0;
+            };
+        }
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
