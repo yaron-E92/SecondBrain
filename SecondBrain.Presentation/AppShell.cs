@@ -17,7 +17,6 @@ public sealed class AppShell : Shell
         Title = "SecondBrain";
         BackgroundColor = SecondBrainVisual.Background;
         FlyoutBackgroundColor = SecondBrainVisual.Navigation;
-        FlyoutForegroundColor = Colors.White;
         Shell.SetBackgroundColor(this, SecondBrainVisual.Navigation);
         Shell.SetForegroundColor(this, Colors.White);
         Shell.SetTitleColor(this, Colors.White);
