@@ -2,6 +2,8 @@ namespace SecondBrain.Presentation;
 
 public sealed class AppShell : Shell
 {
+    private static readonly Color NavigationText = Color.FromArgb("#D9E4EE");
+
     public AppShell(
         MainPage mainPage,
         InboxPage inboxPage,
@@ -9,7 +11,8 @@ public sealed class AppShell : Shell
         ParaBrowserPage paraBrowserPage,
         CoreSearchPage searchPage,
         JournalBrowserPage journalBrowserPage,
-        CoreEditorPage coreEditorPage,
+        CoreCreatePage createPage,
+        CoreEditPage editPage,
         ReviewPage reviewPage,
         SettingsPage settingsPage,
         DataImportPage dataImportPage)
@@ -20,6 +23,7 @@ public sealed class AppShell : Shell
         Shell.SetBackgroundColor(this, SecondBrainVisual.Navigation);
         Shell.SetForegroundColor(this, Colors.White);
         Shell.SetTitleColor(this, Colors.White);
+        Shell.SetUnselectedColor(this, NavigationText);
 
         var isDesktop = DeviceInfo.Idiom == DeviceIdiom.Desktop;
         FlyoutBehavior = isDesktop
@@ -29,11 +33,18 @@ public sealed class AppShell : Shell
         if (isDesktop)
         {
             ConfigureDesktopRail(mainPage);
-            Shell.SetNavBarIsVisible(mainPage, false);
-            Shell.SetNavBarIsVisible(inboxPage, false);
-            Shell.SetNavBarIsVisible(paraBrowserPage, false);
-            Shell.SetNavBarIsVisible(searchPage, false);
-            Shell.SetNavBarIsVisible(reviewPage, false);
+            HideDesktopChrome(
+                mainPage,
+                inboxPage,
+                inboxProcessPage,
+                paraBrowserPage,
+                searchPage,
+                reviewPage,
+                journalBrowserPage,
+                createPage,
+                editPage,
+                settingsPage,
+                dataImportPage);
 
             Items.Add(PrimaryItem("home", "Home", mainPage));
             Items.Add(PrimaryItem("inbox", "Process", inboxPage));
@@ -60,9 +71,18 @@ public sealed class AppShell : Shell
 
         Items.Add(HiddenItem("inbox-process", "Process item", inboxProcessPage));
         Items.Add(HiddenItem("journals", "Journals", journalBrowserPage));
+        Items.Add(HiddenItem("create", "Create knowledge", createPage));
+        Items.Add(HiddenItem("editor", "Edit knowledge", editPage));
         Items.Add(HiddenItem("settings", "Settings", settingsPage));
         Items.Add(HiddenItem("data-import", "Import", dataImportPage));
-        Items.Add(HiddenItem("editor", "Editor", coreEditorPage));
+    }
+
+    private static void HideDesktopChrome(params Page[] pages)
+    {
+        foreach (var page in pages)
+        {
+            Shell.SetNavBarIsVisible(page, false);
+        }
     }
 
     private void ConfigureDesktopRail(MainPage mainPage)
@@ -101,7 +121,7 @@ public sealed class AppShell : Shell
                 {
                     Text = "Capture → Process → Find → Review",
                     FontSize = 12,
-                    TextColor = Color.FromArgb("#C7D3DF"),
+                    TextColor = NavigationText,
                 },
                 capture,
             },
@@ -113,7 +133,7 @@ public sealed class AppShell : Shell
             AutomationId = "GlobalSettings",
             BackgroundColor = Colors.Transparent,
             TextColor = Colors.White,
-            BorderColor = Color.FromArgb("#40556A"),
+            BorderColor = Color.FromArgb("#55708A"),
             BorderWidth = 1,
             CornerRadius = 10,
             MinimumHeightRequest = 44,
@@ -150,14 +170,20 @@ public sealed class AppShell : Shell
         ToolbarItems.Add(settings);
     }
 
-    private static FlyoutItem PrimaryItem(string route, string title, Page page) =>
-        new()
+    private static FlyoutItem PrimaryItem(string route, string title, Page page)
+    {
+        var item = new FlyoutItem
         {
             Route = route,
             Title = title,
             AutomationId = $"Primary{title}",
             Items = { new ShellContent { Title = title, Content = page } },
         };
+        Shell.SetForegroundColor(item, Colors.White);
+        Shell.SetTitleColor(item, Colors.White);
+        Shell.SetUnselectedColor(item, NavigationText);
+        return item;
+    }
 
     private static ShellContent PrimaryContent(string route, string title, Page page) =>
         new()
