@@ -21,6 +21,9 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
     private readonly Label _catalogMessage;
     private readonly Label _relationshipMessage;
     private readonly Button _backToWorkspaceButton;
+    private readonly Label _heading;
+    private readonly Label _subheading;
+    private readonly Button _saveButton;
     private CoreKnowledgeState? _state;
     private BrainItemKind? _pendingCreateKind;
     private SecondBrainItemId? _pendingItemId;
@@ -38,8 +41,22 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _viewModel = viewModel;
         _repository = repository;
         BindingContext = viewModel;
-        Title = "Editor";
-        BackgroundColor = Colors.White;
+        Title = "Edit knowledge";
+        BackgroundColor = Color.FromArgb("#F6F8FB");
+
+        _heading = new Label
+        {
+            Text = "Edit knowledge",
+            FontSize = 28,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.Black
+        };
+        _subheading = new Label
+        {
+            Text = "Keep established knowledge useful and in the right home.",
+            TextColor = Colors.DarkSlateGray
+        };
+        _saveButton = new Button { Text = "Save" };
 
         _kindPicker = EnumPicker<BrainItemKind>();
         _kindPicker.SelectedItem = BrainItemKind.Note;
@@ -164,6 +181,9 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         _derivationReturnItemId = null;
         _backToWorkspaceButton.Text = "← Back to workspace";
         _backToWorkspaceButton.IsVisible = false;
+        _heading.Text = "Edit knowledge";
+        _subheading.Text = "Keep established knowledge useful and in the right home.";
+        _saveButton.Text = "Save";
 
         var contextKind = default(ParaContextKind);
         var contextId = Guid.Empty;
@@ -220,6 +240,12 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             {
                 _backToWorkspaceButton.Text = $"← Back to {_directReturnRoute}";
                 _backToWorkspaceButton.IsVisible = true;
+            }
+
+            if (_directReturnRoute == "inbox")
+            {
+                _heading.Text = "Process capture";
+                _subheading.Text = "Edit if needed, choose its kind and home, then remove it from Inbox.";
             }
         }
     }
@@ -551,10 +577,17 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             }
         };
 
-        var save = new Button { Text = "Save" };
-        save.Clicked += async (_, _) =>
+        _saveButton.Clicked += async (_, _) =>
         {
             var derivationOriginId = _viewModel.DerivationOriginId;
+            var processedInboxCapture =
+                derivationOriginId is not null && _directReturnRoute == "inbox";
+            var destination = PlacementLabel(_placementPicker.SelectedItem);
+            if (processedInboxCapture)
+            {
+                _viewModel.MarkSourcesReferenced = true;
+            }
+
             await _viewModel.SaveCommand.ExecuteAsync(null);
             if (!_viewModel.HasError)
             {
@@ -565,7 +598,15 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
                     RefreshRelationships();
                 }
 
-                if (derivationOriginId is not null)
+                if (processedInboxCapture)
+                {
+                    await DisplayAlertAsync(
+                        "Inbox item processed",
+                        $"Removed from Inbox and saved to {destination}.",
+                        "OK");
+                    await Shell.Current.GoToAsync("//inbox");
+                }
+                else if (derivationOriginId is not null)
                 {
                     _derivationReturnItemId = derivationOriginId;
                     _backToWorkspaceButton.Text = "← Back to source capture";
@@ -586,7 +627,7 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         {
             Spacing = 10,
             HorizontalOptions = LayoutOptions.End,
-            Children = { cancel, save }
+            Children = { cancel, _saveButton }
         };
     }
 
@@ -625,6 +666,11 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
         {
             var sources = _sourceCaptures.SelectedItems?.Cast<BrainItem>() ?? [];
             _viewModel.BeginDerivation(kind, sources, placement);
+            if (_directReturnRoute == "inbox")
+            {
+                _viewModel.MarkSourcesReferenced = true;
+                _saveButton.Text = "Save & remove from Inbox";
+            }
             _kindPicker.SelectedItem = kind;
             _catalogMessage.Text = string.Empty;
             SyncDateFields();
@@ -967,6 +1013,15 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             _ => null,
         };
 
+    private static string PlacementLabel(object? value) =>
+        value switch
+        {
+            Area area => $"Area · {area.Name.Value}",
+            Project project => $"Project · {project.Name.Value}",
+            ResourceTopic topic => $"Resource · {topic.Name.Value}",
+            _ => "the selected home",
+        };
+
     private static Picker EnumPicker<T>()
         where T : struct, Enum =>
         new()
@@ -1009,24 +1064,10 @@ public sealed class CoreEditorPage : ContentPage, IQueryAttributable
             Keyboard = Keyboard.Text
         };
 
-    private static View Header() =>
+    private View Header() =>
         new VerticalStackLayout
         {
-            Children =
-            {
-                new Label
-                {
-                    Text = "Core content editor",
-                    FontSize = 28,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black
-                },
-                new Label
-                {
-                    Text = "Create or develop typed knowledge.",
-                    TextColor = Colors.DarkSlateGray
-                }
-            }
+            Children = { _heading, _subheading }
         };
 
     private static View TypedSection(

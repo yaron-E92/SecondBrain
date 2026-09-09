@@ -14,60 +14,66 @@ public sealed class AppShell : Shell
         DataImportPage dataImportPage)
     {
         Title = "SecondBrain";
+        BackgroundColor = Color.FromArgb("#F6F8FB");
+        Shell.SetBackgroundColor(this, Color.FromArgb("#17283A"));
+        Shell.SetForegroundColor(this, Colors.White);
+        FlyoutBehavior = DeviceInfo.Idiom == DeviceIdiom.Desktop
+            ? FlyoutBehavior.Locked
+            : FlyoutBehavior.Disabled;
+
+        var capture = new ToolbarItem
+        {
+            Text = "+ Capture",
+            Order = ToolbarItemOrder.Primary,
+            Priority = 0,
+            AutomationId = "GlobalCapture"
+        };
+        capture.Clicked += async (_, _) =>
+        {
+            await GoToAsync("//home");
+            mainPage.FocusCapture();
+        };
+        ToolbarItems.Add(capture);
 
         var settings = new ToolbarItem
         {
             Text = "Settings",
-            Order = ToolbarItemOrder.Primary,
-            Priority = 0,
+            Order = ToolbarItemOrder.Secondary,
+            Priority = 1,
             AutomationId = "GlobalSettings"
         };
         settings.Clicked += async (_, _) => await GoToAsync("//settings");
         ToolbarItems.Add(settings);
 
-        Items.Add(new TabBar
+        if (DeviceInfo.Idiom == DeviceIdiom.Desktop)
         {
-            Title = "SecondBrain",
-            FlyoutDisplayOptions = FlyoutDisplayOptions.AsMultipleItems,
-            Items =
+            Items.Add(PrimaryItem("home", "Home", mainPage));
+            Items.Add(PrimaryItem("inbox", "Inbox", inboxPage));
+            Items.Add(PrimaryItem("para", "Browse", paraBrowserPage));
+            Items.Add(PrimaryItem("search", "Search", searchPage));
+            Items.Add(PrimaryItem("review", "Review", reviewPage));
+        }
+        else
+        {
+            Items.Add(new TabBar
             {
-                new ShellContent
+                Title = "SecondBrain",
+                Items =
                 {
-                    Route = "home",
-                    Title = "Home",
-                    Content = mainPage
-                },
-                new ShellContent
-                {
-                    Route = "inbox",
-                    Title = "Inbox",
-                    Content = inboxPage
-                },
-                new ShellContent
-                {
-                    Route = "para",
-                    Title = "Browse",
-                    Content = paraBrowserPage
-                },
-                new ShellContent
-                {
-                    Route = "search",
-                    Title = "Search",
-                    Content = searchPage
-                },
-                new ShellContent
-                {
-                    Route = "review",
-                    Title = "Review",
-                    Content = reviewPage
+                    PrimaryContent("home", "Home", mainPage),
+                    PrimaryContent("inbox", "Inbox", inboxPage),
+                    PrimaryContent("para", "Browse", paraBrowserPage),
+                    PrimaryContent("search", "Search", searchPage),
+                    PrimaryContent("review", "Review", reviewPage),
                 }
-            }
-        });
+            });
+        }
 
         Items.Add(new FlyoutItem
         {
             Route = "journals",
             Title = "Journals",
+            FlyoutItemIsVisible = false,
             Items =
             {
                 new ShellContent
@@ -82,6 +88,7 @@ public sealed class AppShell : Shell
         {
             Route = "settings",
             Title = "Settings",
+            FlyoutItemIsVisible = false,
             Items =
             {
                 new ShellContent
@@ -123,4 +130,22 @@ public sealed class AppShell : Shell
         };
         Items.Add(editor);
     }
+
+    private static FlyoutItem PrimaryItem(string route, string title, Page page) =>
+        new()
+        {
+            Route = route,
+            Title = title,
+            AutomationId = $"Primary{title}",
+            Items = { new ShellContent { Title = title, Content = page } },
+        };
+
+    private static ShellContent PrimaryContent(string route, string title, Page page) =>
+        new()
+        {
+            Route = route,
+            Title = title,
+            Content = page,
+            AutomationId = $"Primary{title}",
+        };
 }

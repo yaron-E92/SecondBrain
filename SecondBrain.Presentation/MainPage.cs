@@ -1,21 +1,23 @@
 using SecondBrain.Presentation.ViewModels;
 using SecondBrain.Application.UseCases;
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Layouts;
 
 namespace SecondBrain.Presentation;
 
 public sealed class MainPage : ContentPage
 {
     private readonly DashboardViewModel viewModel;
+    private readonly Editor captureEditor;
 
     public MainPage(DashboardViewModel viewModel)
     {
         this.viewModel = viewModel;
         BindingContext = viewModel;
         Title = "Home";
-        BackgroundColor = Colors.White;
+        BackgroundColor = Color.FromArgb("#F6F8FB");
 
-        var captureEditor = new Editor
+        captureEditor = new Editor
         {
             AutoSize = EditorAutoSizeOption.TextChanges,
             MinimumHeightRequest = 88,
@@ -49,21 +51,23 @@ public sealed class MainPage : ContentPage
                     Spacing = 20,
                     Children =
                     {
-                        Header("SecondBrain", "Your offline workspace"),
+                        Header("Home", "OFFLINE WORKSPACE"),
                         FailureState(
                             nameof(viewModel.HasError),
                             nameof(viewModel.ErrorMessage),
                             nameof(viewModel.LoadCommand)),
                         LoadingState(nameof(viewModel.IsLoading)),
                         Section(
-                            "Quick capture",
+                            "Get the thought out of your head.",
+                            new Label
+                            {
+                                Text = "Capture first. Decide where it belongs when you have the attention for it.",
+                                TextColor = Color.FromArgb("#65717B")
+                            },
                             captureEditor,
                             captureButton,
                             captureStatus),
-                        Section(
-                            "Review",
-                            ReviewButton("Start Inbox review", "inbox", "home"),
-                            ReviewButton("Review due PARA items", "para", "home")),
+                        AttentionSection(),
                         ItemSection(
                             "Inbox",
                             nameof(viewModel.InboxItems),
@@ -83,8 +87,7 @@ public sealed class MainPage : ContentPage
                             nameof(viewModel.RecentItems),
                             nameof(viewModel.AreRecentItemsEmpty),
                             "Your recently updated items will appear here.",
-                            "home"),
-                        ModuleSection(viewModel)
+                            "home")
                     }
                 }
             }
@@ -96,6 +99,13 @@ public sealed class MainPage : ContentPage
             RefreshView.CommandProperty,
             nameof(viewModel.LoadCommand));
         Content = refreshView;
+    }
+
+    public void FocusCapture()
+    {
+        Dispatcher.DispatchDelayed(
+            TimeSpan.FromMilliseconds(150),
+            () => captureEditor.Focus());
     }
 
     protected override async void OnAppearing()
@@ -170,6 +180,36 @@ public sealed class MainPage : ContentPage
                 "No Projects yet. Create one to give current work a home."),
             manageProjects,
             collection);
+    }
+
+    private static View AttentionSection()
+    {
+        var inbox = new Button
+        {
+            Text = "Process Inbox",
+            HorizontalOptions = LayoutOptions.Start,
+            AutomationId = "HomeProcessInbox",
+        };
+        inbox.Clicked += async (_, _) => await Shell.Current.GoToAsync("//inbox");
+
+        return Section(
+            "What needs attention",
+            new Label
+            {
+                Text = "Give captured thoughts a home, or enter a deliberate maintenance review.",
+                TextColor = Color.FromArgb("#65717B"),
+            },
+            new FlexLayout
+            {
+                Direction = FlexDirection.Row,
+                Wrap = FlexWrap.Wrap,
+                AlignItems = FlexAlignItems.Start,
+                Children =
+                {
+                    inbox,
+                    ReviewButton("Start Review", "para", "home"),
+                },
+            });
     }
 
     private static View ItemSection(
@@ -250,50 +290,6 @@ public sealed class MainPage : ContentPage
                 ["itemId"] = item.Id.Value.ToString(),
                 ["returnRoute"] = returnRoute,
             });
-
-    private static View ModuleSection(DashboardViewModel viewModel)
-    {
-        var collection = new CollectionView
-        {
-            ItemTemplate = new DataTemplate(() =>
-            {
-                var name = new Label
-                {
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black
-                };
-                name.SetBinding(Label.TextProperty, nameof(DashboardModuleSlot.Name));
-                var emptyMessage = new Label
-                {
-                    FontSize = 13,
-                    TextColor = Colors.DarkSlateGray
-                };
-                emptyMessage.SetBinding(
-                    Label.TextProperty,
-                    nameof(DashboardModuleSlot.EmptyMessage));
-                return new Border
-                {
-                    Stroke = Colors.LightGray,
-                    StrokeShape = new RoundRectangle { CornerRadius = 8 },
-                    Padding = 12,
-                    Content = new VerticalStackLayout
-                    {
-                        Children = { name, emptyMessage }
-                    }
-                };
-            })
-        };
-        collection.SetBinding(
-            ItemsView.ItemsSourceProperty,
-            nameof(viewModel.ModuleSlots));
-
-        return Section(
-            "Module extensions",
-            EmptyState(
-                nameof(viewModel.AreModuleSlotsEmpty),
-                "No optional modules are enabled."),
-            collection);
-    }
 
     private static Button ReviewButton(
         string text,
@@ -426,7 +422,7 @@ public sealed class InboxPage : ContentPage
         this.viewModel = viewModel;
         BindingContext = viewModel;
         Title = "Inbox";
-        BackgroundColor = Colors.White;
+        BackgroundColor = Color.FromArgb("#F6F8FB");
 
         var items = new CollectionView
         {
@@ -497,12 +493,18 @@ public sealed class InboxPage : ContentPage
 
         var captureButton = new Button
         {
-            Text = "Go to quick capture",
+            Text = "+ Capture",
             HorizontalOptions = LayoutOptions.Center
         };
         captureButton.SetBinding(IsVisibleProperty, nameof(viewModel.IsEmpty));
         captureButton.Clicked += async (_, _) =>
+        {
             await Shell.Current.GoToAsync("//home");
+            if (Shell.Current.CurrentPage is MainPage home)
+            {
+                home.FocusCapture();
+            }
+        };
 
         var errorMessage = new Label { TextColor = Colors.DarkRed };
         errorMessage.SetBinding(
@@ -538,14 +540,19 @@ public sealed class InboxPage : ContentPage
 
         var heading = new Label
         {
-            Text = "Captured thoughts",
+            Text = "Inbox",
             FontSize = 28,
             FontAttributes = FontAttributes.Bold,
             TextColor = Colors.Black
         };
+        var guidance = new Label
+        {
+            Text = "Captured thoughts wait here until you choose the right home. Processing one successfully removes it from this queue.",
+            TextColor = Color.FromArgb("#65717B"),
+        };
         var reviewButton = new Button
         {
-            Text = "Start Inbox review",
+            Text = "Review Inbox deliberately",
             HorizontalOptions = LayoutOptions.Start,
         };
         reviewButton.Clicked += async (_, _) =>
@@ -568,10 +575,11 @@ public sealed class InboxPage : ContentPage
             }
         };
         Grid.SetRow(heading, 0);
-        Grid.SetRow(reviewButton, 1);
-        Grid.SetRow(loading, 2);
-        Grid.SetRow(statePanel, 3);
-        Grid.SetRow(items, 4);
+        Grid.SetRow(guidance, 1);
+        Grid.SetRow(reviewButton, 2);
+        Grid.SetRow(loading, 3);
+        Grid.SetRow(statePanel, 4);
+        Grid.SetRow(items, 5);
 
         Content = new Grid
         {
@@ -582,11 +590,13 @@ public sealed class InboxPage : ContentPage
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Star)
             },
             Children =
             {
                 heading,
+                guidance,
                 reviewButton,
                 loading,
                 statePanel,

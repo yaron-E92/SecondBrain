@@ -12,7 +12,7 @@ public sealed class CoreSearchPage : ContentPage
         _viewModel = viewModel;
         BindingContext = viewModel;
         Title = "Search";
-        BackgroundColor = Colors.White;
+        BackgroundColor = Color.FromArgb("#F6F8FB");
 
         var query = new SearchBar
         {
@@ -35,6 +35,12 @@ public sealed class CoreSearchPage : ContentPage
             TextColor = Colors.DarkOrange
         };
         stale.SetBinding(IsVisibleProperty, nameof(viewModel.AreResultsStale));
+
+        var providerFailures = ProviderFailures(viewModel);
+        var providerResults = ProviderResults();
+        providerResults.SetBinding(
+            ItemsView.ItemsSourceProperty,
+            nameof(viewModel.FederatedResults));
 
         var results = ItemCollection();
         results.SetBinding(ItemsView.ItemsSourceProperty, nameof(viewModel.Results));
@@ -93,6 +99,17 @@ public sealed class CoreSearchPage : ContentPage
             nameof(viewModel.IsLoading));
         loading.SetBinding(IsVisibleProperty, nameof(viewModel.IsLoading));
 
+        var resultSection = Section("Results", results, loadMore);
+        var detailSection = Section(
+            "Selected result",
+            detail,
+            new HorizontalStackLayout
+            {
+                Spacing = 10,
+                Children = { open, placement }
+            },
+            backlinks);
+
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
@@ -113,17 +130,10 @@ public sealed class CoreSearchPage : ContentPage
                     },
                     status,
                     stale,
+                    providerFailures,
+                    Section("Enabled sources", providerResults),
                     emptyAction,
-                    Section("Results", results, loadMore),
-                    Section(
-                        "Selected result",
-                        detail,
-                        new HorizontalStackLayout
-                        {
-                            Spacing = 10,
-                            Children = { open, placement }
-                        },
-                        backlinks),
+                    SearchWorkspace(resultSection, detailSection),
                     RetrievalSection(
                         "Favorites",
                         nameof(viewModel.Favorites),
@@ -149,18 +159,44 @@ public sealed class CoreSearchPage : ContentPage
         {
             new Label
             {
-                Text = "Search Core",
+                Text = "Search",
                 FontSize = 28,
                 FontAttributes = FontAttributes.Bold,
                 TextColor = Colors.Black
             },
             new Label
             {
-                Text = "Find persisted knowledge and follow its context.",
+                Text = "Search everything you enabled. Results always identify their owner.",
                 TextColor = Colors.DarkSlateGray
             }
         }
     };
+
+    private static View SearchWorkspace(View results, View detail)
+    {
+        if (DeviceInfo.Idiom != DeviceIdiom.Desktop)
+        {
+            return new VerticalStackLayout
+            {
+                Spacing = 14,
+                Children = { results, detail },
+            };
+        }
+
+        var workspace = new Grid
+        {
+            ColumnSpacing = 16,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(new GridLength(330)),
+            },
+        };
+        Grid.SetColumn(detail, 1);
+        workspace.Children.Add(results);
+        workspace.Children.Add(detail);
+        return workspace;
+    }
 
     private static View FilterRow(CoreSearchViewModel viewModel)
     {
@@ -260,7 +296,8 @@ public sealed class CoreSearchPage : ContentPage
             var context = new Label { FontSize = 12, TextColor = Colors.DarkSlateGray };
             context.SetBinding(
                 Label.TextProperty,
-                nameof(CoreSearchItem.KindAndPlacement));
+                nameof(CoreSearchItem.KindAndPlacement),
+                stringFormat: "Core · {0}");
             var preview = new Label
             {
                 FontSize = 13,
@@ -276,6 +313,93 @@ public sealed class CoreSearchPage : ContentPage
                 Children = { title, context, preview, state }
             };
         })
+    };
+
+    private static View ProviderFailures(CoreSearchViewModel viewModel)
+    {
+        var failures = new CollectionView
+        {
+            SelectionMode = SelectionMode.None,
+            ItemTemplate = new DataTemplate(() =>
+            {
+                var message = new Label { TextColor = Colors.DarkRed };
+                message.SetBinding(Label.TextProperty, nameof(SearchProviderFailure.Message));
+                var retry = new Button { Text = "Retry source" };
+                retry.SetBinding(
+                    Button.CommandProperty,
+                    new Binding(nameof(viewModel.RetryProviderCommand), source: viewModel));
+                retry.SetBinding(Button.CommandParameterProperty, ".");
+                return new Border
+                {
+                    Stroke = Colors.DarkOrange,
+                    Padding = 12,
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 6,
+                        Children = { message, retry },
+                    },
+                };
+            }),
+        };
+        failures.SetBinding(
+            ItemsView.ItemsSourceProperty,
+            nameof(viewModel.ProviderFailures));
+        failures.SetBinding(IsVisibleProperty, nameof(viewModel.HasProviderFailures));
+        return failures;
+    }
+
+    private static CollectionView ProviderResults() => new()
+    {
+        SelectionMode = SelectionMode.None,
+        EmptyView = new Label
+        {
+            Text = "No additional provider results. Core results remain available below.",
+            TextColor = Colors.DarkSlateGray,
+        },
+        ItemTemplate = new DataTemplate(() =>
+        {
+            var source = new Label
+            {
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Colors.DarkSlateBlue,
+            };
+            source.SetBinding(
+                Label.TextProperty,
+                nameof(FederatedSearchItem.SourceName),
+                stringFormat: "Owned by {0}");
+            var title = new Label
+            {
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Colors.Black,
+            };
+            title.SetBinding(Label.TextProperty, nameof(FederatedSearchItem.Title));
+            var preview = new Label { MaxLines = 2 };
+            preview.SetBinding(Label.TextProperty, nameof(FederatedSearchItem.Preview));
+            var open = new Button { Text = "Open in source" };
+            open.Clicked += async (sender, _) =>
+            {
+                if (sender is Button { BindingContext: FederatedSearchItem item })
+                {
+                    try
+                    {
+                        await Shell.Current.GoToAsync(item.OpenRoute);
+                    }
+                    catch (Exception exception)
+                    {
+                        await Shell.Current.CurrentPage.DisplayAlertAsync(
+                            $"Could not open {item.SourceName}",
+                            exception.Message,
+                            "OK");
+                    }
+                }
+            };
+            return new VerticalStackLayout
+            {
+                Padding = new Thickness(4, 8),
+                Children = { source, title, preview, open },
+            };
+        }),
     };
 
     private static View RetrievalSection(

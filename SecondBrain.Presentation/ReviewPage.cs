@@ -13,7 +13,7 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
     {
         _viewModel = viewModel;
         BindingContext = viewModel;
-        BackgroundColor = Colors.White;
+        BackgroundColor = Color.FromArgb("#F6F8FB");
 
         var heading = new Label
         {
@@ -95,14 +95,14 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
             {
                 new Label
                 {
-                    Text = "Review complete",
+                    Text = "Nothing needs attention",
                     FontSize = 22,
                     FontAttributes = FontAttributes.Bold,
                     TextColor = Colors.DarkGreen,
                 },
                 BoundLabel(
                     nameof(viewModel.ChangedCount),
-                    "{0} item(s) changed. Nothing remains due in this review."),
+                    "{0} item(s) changed. This review is complete."),
             },
         };
         completion.SetBinding(IsVisibleProperty, nameof(viewModel.IsComplete));

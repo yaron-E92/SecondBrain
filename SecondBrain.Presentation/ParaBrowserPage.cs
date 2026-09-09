@@ -20,8 +20,8 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
     {
         _viewModel = viewModel;
         BindingContext = viewModel;
-        Title = "PARA";
-        BackgroundColor = Colors.White;
+        Title = "Browse";
+        BackgroundColor = Color.FromArgb("#F6F8FB");
 
         var browser = new VerticalStackLayout
         {
@@ -115,25 +115,35 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
         _viewModel.OpenWorkspace(kind, id, returnRoute ?? "para");
     }
 
-    private View Header() =>
-        new VerticalStackLayout
+    private View Header()
+    {
+        var journals = new Button
+        {
+            Text = "Journals",
+            HorizontalOptions = LayoutOptions.Start,
+            AutomationId = "BrowseJournals",
+        };
+        journals.Clicked += async (_, _) => await Shell.Current.GoToAsync("//journals");
+        return new VerticalStackLayout
         {
             Children =
             {
                 new Label
                 {
-                    Text = "PARA workspace",
+                    Text = "Browse",
                     FontSize = 28,
                     FontAttributes = FontAttributes.Bold,
                     TextColor = Colors.Black
                 },
                 new Label
                 {
-                    Text = "Browse one primary home and keep relationships visible.",
+                    Text = "Projects, Areas, Resources, Archive, and Journals — knowledge by its useful home.",
                     TextColor = Colors.DarkSlateGray
-                }
+                },
+                journals,
             }
         };
+    }
 
     private View Workspace()
     {
