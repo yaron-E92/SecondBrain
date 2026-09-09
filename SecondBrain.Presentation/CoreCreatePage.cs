@@ -172,7 +172,10 @@ public sealed class CoreCreatePage : ContentPage, IQueryAttributable
                 SelectPlacement(placement);
             }
 
-            if (_pendingKind is not null || _pendingPlacement is not null || _deriveFromId is not null)
+            // A preselected type alone is not enough to start creating: the
+            // user still needs to choose a meaningful home. Contextual entry
+            // points that supplied a placement can continue immediately.
+            if (_pendingPlacement is not null || _deriveFromId is not null)
             {
                 await BeginSelectedAsync();
             }
