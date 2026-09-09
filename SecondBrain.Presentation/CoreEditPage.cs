@@ -13,7 +13,8 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
     private readonly Label _message;
     private readonly Label _homeLabel;
     private readonly VerticalStackLayout _relationships;
-    private readonly VerticalStackLayout _captureActions;
+    private readonly Border _relationshipCard;
+    private readonly Border _captureCard;
     private SecondBrainItemId? _pendingItemId;
     private string _returnRoute = "para";
     private BrainItem? _currentItem;
@@ -40,28 +41,26 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
         };
 
         _relationships = new VerticalStackLayout { Spacing = 8 };
-        var relationshipCard = SecondBrainVisual.Card(
+        _relationshipCard = SecondBrainVisual.Card(
             SecondBrainVisual.Eyebrow("Context"),
             SecondBrainVisual.SectionTitle("Related knowledge"),
             _relationships);
-        relationshipCard.SetBinding(IsVisibleProperty, nameof(viewModel.IsNew), converter: new InvertedBooleanConverter());
+        _relationshipCard.IsVisible = false;
 
-        _captureActions = new VerticalStackLayout
-        {
-            Spacing = 10,
-            IsVisible = false,
-        };
         var deriveNote = SecondBrainVisual.SecondaryButton("Create Note from this capture", "EditKnowledgeDeriveNote");
         deriveNote.Clicked += async (_, _) => await CreateFromCaptureAsync(BrainItemKind.Note);
         var deriveResource = SecondBrainVisual.SecondaryButton("Create Resource from this capture", "EditKnowledgeDeriveResource");
         deriveResource.Clicked += async (_, _) => await CreateFromCaptureAsync(BrainItemKind.ResourceArtifact);
-        _captureActions.Children.Add(SecondBrainVisual.Body(
-            "Use this capture as source material, but create the authored item in its own focused flow."));
-        _captureActions.Children.Add(new HorizontalStackLayout
-        {
-            Spacing = 10,
-            Children = { deriveNote, deriveResource },
-        });
+        _captureCard = SecondBrainVisual.Card(
+            SecondBrainVisual.Eyebrow("From this capture"),
+            SecondBrainVisual.Body(
+                "Use this capture as source material, but create the authored item in its own focused flow."),
+            new HorizontalStackLayout
+            {
+                Spacing = 10,
+                Children = { deriveNote, deriveResource },
+            });
+        _captureCard.IsVisible = false;
 
         var save = SecondBrainVisual.PrimaryButton("Save changes", "EditKnowledgeSave");
         save.Clicked += async (_, _) => await SaveAsync();
@@ -101,10 +100,8 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
                         _homeLabel,
                         openHome),
                     _form,
-                    SecondBrainVisual.Card(
-                        SecondBrainVisual.Eyebrow("From this capture"),
-                        _captureActions),
-                    relationshipCard,
+                    _captureCard,
+                    _relationshipCard,
                     dirty,
                     busy,
                     error,
@@ -144,6 +141,8 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
             {
                 _message.Text = "That item is no longer available. Return to the previous view and refresh.";
                 _form.IsVisible = false;
+                _captureCard.IsVisible = false;
+                _relationshipCard.IsVisible = false;
                 return;
             }
 
@@ -164,7 +163,8 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
             _homeLabel.Text = PlacementLabel(item.PrimaryPlacement);
             _form.SyncDates();
             _form.IsVisible = true;
-            _captureActions.IsVisible = item.Kind == BrainItemKind.KnowledgeCapture && !item.IsArchived;
+            _captureCard.IsVisible = item.Kind == BrainItemKind.KnowledgeCapture && !item.IsArchived;
+            _relationshipCard.IsVisible = true;
             BuildRelationships(state.BrainItems, item);
         }
         catch (Exception exception)
@@ -211,16 +211,8 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
         await NavigateBackAsync();
     }
 
-    private async Task NavigateBackAsync()
-    {
-        if (_returnRoute == "editor")
-        {
-            await Shell.Current.GoToAsync("//para");
-            return;
-        }
-
-        await Shell.Current.GoToAsync($"//{_returnRoute}");
-    }
+    private Task NavigateBackAsync() =>
+        Shell.Current.GoToAsync($"//{_returnRoute}");
 
     private async Task OpenHomeAsync()
     {
@@ -343,13 +335,4 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
             "para" => "para",
             _ => "para",
         };
-
-    private sealed class InvertedBooleanConverter : IValueConverter
-    {
-        public object Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
-            value is bool flag && !flag;
-
-        public object ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
-            throw new NotSupportedException();
-    }
 }
