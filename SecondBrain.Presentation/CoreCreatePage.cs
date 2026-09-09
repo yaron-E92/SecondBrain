@@ -113,12 +113,29 @@ public sealed class CoreCreatePage : ContentPage, IQueryAttributable
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
+        ResetSurface();
         _pendingKind = TryEnum<BrainItemKind>(query, "itemKind");
         _pendingPlacement = TryPlacement(query);
         _pendingJournalId = TryId(query, "journalId");
         _deriveFromId = TryId(query, "deriveFromId");
         _returnItemId = TryId(query, "returnItemId");
         _returnRoute = NormalizeReturnRoute(Value(query, "returnRoute"));
+    }
+
+    private void ResetSurface()
+    {
+        _viewModel.CancelCommand.Execute(null);
+        _form.IsVisible = false;
+        _kindPicker.IsEnabled = true;
+        _placementPicker.IsEnabled = true;
+        _startButton.IsVisible = true;
+        _message.Text = string.Empty;
+        _pendingKind = null;
+        _pendingPlacement = null;
+        _pendingJournalId = null;
+        _deriveFromId = null;
+        _returnItemId = null;
+        _returnRoute = "para";
     }
 
     private async Task LoadChoicesAndApplyNavigationAsync()
