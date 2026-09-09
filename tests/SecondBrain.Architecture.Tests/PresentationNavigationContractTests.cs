@@ -74,6 +74,8 @@ public sealed class PresentationNavigationContractTests
                 "The contextual creation page must reset drafts and controls between route entries.");
             Assert.That(create, Does.Contain("if (_pendingPlacement is not null || _deriveFromId is not null)"),
                 "A preselected type alone must not silently choose the first available home.");
+            Assert.That(create, Does.Contain("CreateKnowledgeManageHomes"),
+                "Creation must offer a recovery path when no suitable home exists yet.");
 
             Assert.That(edit, Does.Contain("Title = \"Edit knowledge\""));
             Assert.That(edit, Does.Contain("Creation is a separate flow."));
@@ -92,6 +94,43 @@ public sealed class PresentationNavigationContractTests
             Assert.That(edit, Does.Contain("await Shell.Current.GoToAsync(\"//create\", forward);"));
             Assert.That(edit, Does.Not.Contain("Dispatcher.Dispatch(async"),
                 "Route forwarding must not be fire-and-forget from ApplyQueryAttributes.");
+        });
+    }
+
+    [Test]
+    public void Browse_ContextualActionsPreserveTheirReturnJourney()
+    {
+        var browse = ReadPresentationFile("ParaBrowserPage.cs");
+        var process = ReadPresentationFile("InboxProcessPage.cs");
+        var journals = ReadPresentationFile("JournalBrowserPage.cs");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(browse, Does.Contain("\"inbox-process\" => \"inbox-process\""));
+            Assert.That(browse, Does.Contain("_returnInboxProcessItemId"));
+            Assert.That(browse, Does.Contain("[\"contextKind\"] = savedContext.Kind.ToString()"),
+                "A newly-created PARA home must be carried back into the focused Create flow.");
+            Assert.That(browse, Does.Contain("await Shell.Current.GoToAsync(\n                    \"//create\""),
+                "Workspace creation buttons should target the Create surface directly.");
+            Assert.That(process, Does.Contain("[\"itemId\"] = itemId.Value.Value.ToString()"),
+                "Managing homes while processing must preserve the Inbox item identity.");
+            Assert.That(journals, Does.Contain("\"//create\""));
+            Assert.That(journals, Does.Not.Contain("[\"mode\"] = \"create\""),
+                "Journal entry creation should not bounce through the Edit compatibility shim.");
+        });
+    }
+
+    [Test]
+    public void Review_PrimaryNavigationResetsScopeButContextualReturnCanResume()
+    {
+        var review = ReadPresentationFile("ReviewPage.cs");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(review, Does.Contain("_configuredByNavigation"));
+            Assert.That(review, Does.Contain("_resumeConfiguredReview"));
+            Assert.That(review, Does.Contain("ReviewQueueKind.Para"));
+            Assert.That(review, Does.Contain("_resumeConfiguredReview = true;"));
         });
     }
 
