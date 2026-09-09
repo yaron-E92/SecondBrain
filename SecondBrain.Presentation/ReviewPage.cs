@@ -1,4 +1,4 @@
-using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Layouts;
 using SecondBrain.Application.Ports;
 using SecondBrain.Application.UseCases;
 using SecondBrain.Presentation.ViewModels;
@@ -13,17 +13,17 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
     {
         _viewModel = viewModel;
         BindingContext = viewModel;
-        BackgroundColor = Color.FromArgb("#F6F8FB");
+        Title = "Review";
+        BackgroundColor = SecondBrainVisual.Background;
 
-        var heading = new Label
-        {
-            FontSize = 28,
-            FontAttributes = FontAttributes.Bold,
-            TextColor = Colors.Black,
-        };
+        var heading = SecondBrainVisual.PageTitle("Review");
         heading.SetBinding(Label.TextProperty, nameof(viewModel.Title));
 
-        var progress = new Label { TextColor = Colors.DarkSlateGray };
+        var progress = new Label
+        {
+            TextColor = SecondBrainVisual.Muted,
+            FontSize = 13,
+        };
         progress.SetBinding(
             Label.TextProperty,
             nameof(viewModel.RemainingCount),
@@ -31,123 +31,109 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
 
         var itemTitle = new Label
         {
-            FontSize = 22,
+            FontSize = 23,
             FontAttributes = FontAttributes.Bold,
-            TextColor = Colors.Black,
+            TextColor = SecondBrainVisual.Ink,
         };
         itemTitle.SetBinding(
             Label.TextProperty,
             $"{nameof(viewModel.CurrentItem)}.{nameof(ReviewQueueItem.Title)}");
-        var details = new Label { TextColor = Colors.DarkSlateGray };
+        var details = new Label
+        {
+            TextColor = SecondBrainVisual.Muted,
+            LineBreakMode = LineBreakMode.WordWrap,
+        };
         details.SetBinding(
             Label.TextProperty,
             $"{nameof(viewModel.CurrentItem)}.{nameof(ReviewQueueItem.Details)}");
 
-        var open = new Button { Text = "Open item" };
+        var open = SecondBrainVisual.SecondaryButton("Open item", "ReviewOpen");
         open.SetBinding(IsEnabledProperty, nameof(viewModel.CanActOnCurrentItem));
         open.Clicked += async (_, _) => await OpenCurrentAsync();
-        var move = new Button { Text = "Move" };
-        move.SetBinding(
-            IsVisibleProperty,
-            nameof(viewModel.CanMoveCurrentItem));
+        var move = SecondBrainVisual.SecondaryButton("Move", "ReviewMove");
+        move.SetBinding(IsVisibleProperty, nameof(viewModel.CanMoveCurrentItem));
         move.SetBinding(IsEnabledProperty, nameof(viewModel.CanActOnCurrentItem));
         move.Clicked += async (_, _) => await MoveCurrentAsync();
-        var reviewed = new Button { Text = "Mark reviewed" };
-        reviewed.SetBinding(
-            Button.CommandProperty,
-            nameof(viewModel.MarkReviewedCommand));
-        var defer = new Button { Text = "Defer one day" };
+        var reviewed = SecondBrainVisual.PrimaryButton("Mark reviewed", "ReviewMarkReviewed");
+        reviewed.SetBinding(Button.CommandProperty, nameof(viewModel.MarkReviewedCommand));
+        var defer = SecondBrainVisual.SecondaryButton("Defer one day", "ReviewDefer");
         defer.SetBinding(Button.CommandProperty, nameof(viewModel.DeferCommand));
-        var archive = new Button { Text = "Archive" };
+        var archive = SecondBrainVisual.SecondaryButton("Archive", "ReviewArchive");
         archive.SetBinding(Button.CommandProperty, nameof(viewModel.ArchiveCommand));
 
-        var current = new Border
-        {
-            Stroke = Colors.LightGray,
-            StrokeShape = new RoundRectangle { CornerRadius = 12 },
-            Padding = 16,
-            Content = new VerticalStackLayout
-            {
-                Spacing = 12,
-                Children =
-                {
-                    itemTitle,
-                    details,
-                    new HorizontalStackLayout
-                    {
-                        Spacing = 8,
-                        Children = { open, move },
-                    },
-                    new HorizontalStackLayout
-                    {
-                        Spacing = 8,
-                        Children = { reviewed, defer, archive },
-                    },
-                },
-            },
-        };
+        var current = SecondBrainVisual.Card(
+            SecondBrainVisual.Eyebrow("Current item"),
+            itemTitle,
+            details,
+            WrapActions(open, move),
+            WrapActions(reviewed, defer, archive));
         current.SetBinding(IsVisibleProperty, nameof(viewModel.HasCurrentItem));
 
-        var completion = new VerticalStackLayout
-        {
-            Spacing = 8,
-            Children =
+        var changed = BoundLabel(
+            nameof(viewModel.ChangedCount),
+            "{0} item(s) changed. This review is complete.");
+        var completion = SecondBrainVisual.Card(
+            SecondBrainVisual.Eyebrow("Complete"),
+            new Label
             {
-                new Label
-                {
-                    Text = "Nothing needs attention",
-                    FontSize = 22,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.DarkGreen,
-                },
-                BoundLabel(
-                    nameof(viewModel.ChangedCount),
-                    "{0} item(s) changed. This review is complete."),
+                Text = "Nothing needs attention",
+                FontSize = 23,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = SecondBrainVisual.Success,
             },
-        };
+            changed);
         completion.SetBinding(IsVisibleProperty, nameof(viewModel.IsComplete));
 
-        var error = new VerticalStackLayout
-        {
-            Spacing = 8,
-            Children =
-            {
-                BoundLabel(nameof(viewModel.ErrorMessage), textColor: Colors.DarkRed),
-                CommandButton("Retry", nameof(viewModel.LoadCommand)),
-            },
-        };
+        var errorMessage = BoundLabel(
+            nameof(viewModel.ErrorMessage),
+            textColor: SecondBrainVisual.Danger);
+        var retry = SecondBrainVisual.SecondaryButton("Retry", "ReviewRetry");
+        retry.SetBinding(Button.CommandProperty, nameof(viewModel.LoadCommand));
+        var error = SecondBrainVisual.Card(
+            SecondBrainVisual.SectionTitle("Review could not be loaded"),
+            errorMessage,
+            retry);
         error.SetBinding(IsVisibleProperty, nameof(viewModel.HasError));
 
         var status = BoundLabel(nameof(viewModel.StatusMessage));
-        var loading = new ActivityIndicator { Color = Colors.DarkSlateBlue };
-        loading.SetBinding(
-            ActivityIndicator.IsRunningProperty,
-            nameof(viewModel.IsLoading));
+        var loading = new ActivityIndicator
+        {
+            Color = SecondBrainVisual.Accent,
+            HorizontalOptions = LayoutOptions.Start,
+        };
+        loading.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsLoading));
         loading.SetBinding(IsVisibleProperty, nameof(viewModel.IsLoading));
 
-        var back = new Button { Text = "Back to where I started" };
+        var back = SecondBrainVisual.QuietButton(
+            "Back to where I started",
+            "ReviewReturn");
+        back.HorizontalOptions = LayoutOptions.Start;
         back.Clicked += async (_, _) =>
             await Shell.Current.GoToAsync($"//{_viewModel.ReturnRoute}");
 
-        Content = new ScrollView
+        var body = new VerticalStackLayout
         {
-            Content = new VerticalStackLayout
+            Padding = new Thickness(24, 20, 24, 36),
+            Spacing = 16,
+            MaximumWidthRequest = 900,
+            HorizontalOptions = LayoutOptions.Fill,
+            Children =
             {
-                Padding = 20,
-                Spacing = 16,
-                Children =
-                {
-                    heading,
-                    progress,
-                    loading,
-                    error,
-                    current,
-                    completion,
-                    status,
-                    back,
-                },
+                SecondBrainVisual.Eyebrow("Review"),
+                heading,
+                SecondBrainVisual.Body(
+                    "Review is deliberate maintenance, not another permanent work queue."),
+                progress,
+                loading,
+                error,
+                current,
+                completion,
+                status,
+                back,
             },
         };
+
+        Content = new ScrollView { Content = Centered(body, 900) };
     }
 
     protected override async void OnAppearing()
@@ -207,21 +193,56 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
         await Shell.Current.GoToAsync(target.Route, target.Parameters);
     }
 
+    private static FlexLayout WrapActions(params View[] views)
+    {
+        var layout = new FlexLayout
+        {
+            Direction = FlexDirection.Row,
+            Wrap = FlexWrap.Wrap,
+            AlignItems = FlexAlignItems.Center,
+        };
+        foreach (var view in views)
+        {
+            layout.Children.Add(view);
+        }
+        return layout;
+    }
+
     private static Label BoundLabel(
         string property,
         string? format = null,
         Color? textColor = null)
     {
-        var label = new Label { TextColor = textColor ?? Colors.DarkSlateGray };
+        var label = new Label
+        {
+            TextColor = textColor ?? SecondBrainVisual.Muted,
+            LineBreakMode = LineBreakMode.WordWrap,
+        };
         label.SetBinding(Label.TextProperty, property, stringFormat: format);
         return label;
     }
 
-    private static Button CommandButton(string text, string command)
+    private static Grid Centered(View view, double maxWidth)
     {
-        var button = new Button { Text = text };
-        button.SetBinding(Button.CommandProperty, command);
-        return button;
+        var grid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(new GridLength(maxWidth)),
+                new ColumnDefinition(GridLength.Star),
+            },
+            Children = { view },
+        };
+        Grid.SetColumn(view, 1);
+        grid.SizeChanged += (_, _) =>
+        {
+            var wide = grid.Width >= maxWidth + 40;
+            grid.ColumnDefinitions[0].Width = wide ? GridLength.Star : 0;
+            grid.ColumnDefinitions[1].Width = wide ? new GridLength(maxWidth) : GridLength.Star;
+            grid.ColumnDefinitions[2].Width = wide ? GridLength.Star : 0;
+        };
+        return grid;
     }
 
     private static string? Value(IDictionary<string, object> query, string key) =>
