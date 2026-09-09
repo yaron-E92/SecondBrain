@@ -350,6 +350,7 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
             "search" => "search",
             "journals" => "journals",
             "review" => "review",
+            "data-import" => "data-import",
             "para" => "para",
             _ => "para",
         };
