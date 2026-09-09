@@ -8,6 +8,8 @@ namespace SecondBrain.Presentation;
 public sealed class ReviewPage : ContentPage, IQueryAttributable
 {
     private readonly ReviewViewModel _viewModel;
+    private bool _configuredByNavigation;
+    private bool _resumeConfiguredReview;
 
     public ReviewPage(ReviewViewModel viewModel)
     {
@@ -139,6 +141,21 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+
+        // The primary Review destination should always mean the default due
+        // PARA review. Only an explicit route configuration or a deliberate
+        // return from an item/move flow may reuse an existing review scope.
+        if (!_configuredByNavigation && !_resumeConfiguredReview)
+        {
+            _viewModel.Configure(
+                ReviewQueueKind.Para,
+                scopeKind: null,
+                scopeId: null,
+                returnRoute: "home");
+        }
+
+        _configuredByNavigation = false;
+        _resumeConfiguredReview = false;
         await _viewModel.LoadCommand.ExecuteAsync(null);
     }
 
@@ -164,6 +181,8 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
             ? parsedId
             : null;
 
+        _configuredByNavigation = true;
+        _resumeConfiguredReview = false;
         _viewModel.Configure(
             queueKind,
             scopeKind,
@@ -179,6 +198,7 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
             return;
         }
 
+        _resumeConfiguredReview = true;
         await Shell.Current.GoToAsync(target.Route, target.Parameters);
     }
 
@@ -190,6 +210,7 @@ public sealed class ReviewPage : ContentPage, IQueryAttributable
             return;
         }
 
+        _resumeConfiguredReview = true;
         await Shell.Current.GoToAsync(target.Route, target.Parameters);
     }
 
