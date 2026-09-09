@@ -12,7 +12,8 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
     private string _browserReturnRoute = "para";
     private string? _returnEditorItemKind;
     private string? _returnEditorJournalId;
-    private string _returnEditorFinalRoute = "editor";
+    private string _returnEditorFinalRoute = "para";
+    private SecondBrainItemId? _returnInboxProcessItemId;
     private SecondBrainItemId? _reviewMoveItemId;
     private string? _moveReturnRoute;
 
@@ -79,6 +80,7 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
         if (TryGetQueryValue(query, "mode", out var moveMode) &&
             string.Equals(moveMode, "move", StringComparison.OrdinalIgnoreCase))
         {
+            ResetBrowserContinuation();
             _viewModel.CloseWorkspace();
             _reviewMoveItemId = TryGetQueryValue(query, "itemId", out var itemId) &&
                 Guid.TryParse(itemId, out var parsedItemId)
@@ -93,16 +95,30 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
         if (TryGetQueryValue(query, "mode", out var mode) &&
             string.Equals(mode, "browse", StringComparison.OrdinalIgnoreCase))
         {
+            ResetBrowserContinuation();
             _viewModel.CloseWorkspace();
             TryGetQueryValue(query, "returnRoute", out var browseReturnRoute);
-            _browserReturnRoute = browseReturnRoute == "editor" ? "editor" : "para";
+            _browserReturnRoute = browseReturnRoute?.Trim().ToLowerInvariant() switch
+            {
+                "editor" => "editor",
+                "inbox-process" => "inbox-process",
+                _ => "para",
+            };
             TryGetQueryValue(query, "itemKind", out _returnEditorItemKind);
             TryGetQueryValue(query, "journalId", out _returnEditorJournalId);
             TryGetQueryValue(query, "editorReturnRoute", out var editorReturnRoute);
-            _returnEditorFinalRoute = editorReturnRoute is "journals" ? "journals" : "editor";
+            _returnEditorFinalRoute = NormalizeContextReturnRoute(editorReturnRoute);
+            _returnInboxProcessItemId =
+                _browserReturnRoute == "inbox-process" &&
+                TryGetQueryValue(query, "itemId", out var processItemId) &&
+                Guid.TryParse(processItemId, out var parsedProcessItemId) &&
+                parsedProcessItemId != Guid.Empty
+                    ? new SecondBrainItemId(parsedProcessItemId)
+                    : null;
             return;
         }
 
+        ResetBrowserContinuation();
         if (!TryGetQueryValue(query, "contextKind", out var kindValue) ||
             !Enum.TryParse<ParaContextKind>(kindValue, true, out var kind) ||
             !TryGetQueryValue(query, "contextId", out var idValue) ||
@@ -112,7 +128,11 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
         }
 
         TryGetQueryValue(query, "returnRoute", out var returnRoute);
-        _viewModel.OpenWorkspace(kind, id, returnRoute ?? "para");
+        var normalizedReturnRoute = NormalizeContextReturnRoute(returnRoute);
+        _viewModel.OpenWorkspace(kind, id, normalizedReturnRoute);
+        // The ViewModel intentionally knows only core lifecycle routes. Keep
+        // contextual utility routes here at the presentation boundary.
+        _viewModel.WorkspaceReturnRoute = normalizedReturnRoute;
     }
 
     private View Header()
@@ -440,10 +460,13 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
             })
         };
         items.SetBinding(ItemsView.ItemsSourceProperty, itemsProperty);
-        items.SetBinding(
-            SelectableItemsView.SelectedItemProperty,
-            nameof(_viewModel.SelectedItem),
-            mode: BindingMode.TwoWay);
+        items.SelectionChanged += (_, args) =>
+        {
+            if (args.CurrentSelection.FirstOrDefault() is ParaItemSummary selected)
+            {
+                _viewModel.SelectedItem = selected;
+            }
+        };
         return Section(title, empty, items);
     }
 
@@ -668,28 +691,47 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
         var save = new Button { Text = "Save" };
         save.Clicked += async (_, _) =>
         {
-            if (!await _viewModel.SaveContextAsync() ||
-                _browserReturnRoute != "editor")
+            if (!await _viewModel.SaveContextAsync())
             {
                 return;
             }
 
-            var itemKind = _returnEditorItemKind;
-            var journalId = _returnEditorJournalId;
-            var finalRoute = _returnEditorFinalRoute;
-            _browserReturnRoute = "para";
-            _returnEditorItemKind = null;
-            _returnEditorJournalId = null;
-            _returnEditorFinalRoute = "editor";
-            await Shell.Current.GoToAsync(
-                "//editor",
-                new Dictionary<string, object>
+            if (_browserReturnRoute == "editor")
+            {
+                var savedContext = _viewModel.SelectedCatalogContext;
+                if (savedContext is null)
                 {
-                    ["mode"] = "create",
-                    ["itemKind"] = itemKind ?? BrainItemKind.Note.ToString(),
-                    ["journalId"] = journalId ?? string.Empty,
-                    ["returnRoute"] = finalRoute,
-                });
+                    return;
+                }
+
+                var itemKind = _returnEditorItemKind;
+                var journalId = _returnEditorJournalId;
+                var finalRoute = _returnEditorFinalRoute;
+                ResetBrowserContinuation();
+                await Shell.Current.GoToAsync(
+                    "//create",
+                    new Dictionary<string, object>
+                    {
+                        ["itemKind"] = itemKind ?? BrainItemKind.Note.ToString(),
+                        ["journalId"] = journalId ?? string.Empty,
+                        ["contextKind"] = savedContext.Kind.ToString(),
+                        ["contextId"] = savedContext.Id.ToString(),
+                        ["returnRoute"] = finalRoute,
+                    });
+                return;
+            }
+
+            if (_browserReturnRoute == "inbox-process" &&
+                _returnInboxProcessItemId is { } processItemId)
+            {
+                ResetBrowserContinuation();
+                await Shell.Current.GoToAsync(
+                    "//inbox-process",
+                    new Dictionary<string, object>
+                    {
+                        ["itemId"] = processItemId.Value.ToString(),
+                    });
+            }
         };
         var cancel = new Button { Text = "Cancel" };
         cancel.Clicked += (_, _) => _viewModel.CancelContextEdit();
@@ -1137,10 +1179,9 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
         }
 
         await Shell.Current.GoToAsync(
-            "//editor",
+            "//create",
             new Dictionary<string, object>
             {
-                ["mode"] = "create",
                 ["itemKind"] = target.Kind.ToString(),
                 ["contextKind"] = workspace.Kind.ToString(),
                 ["contextId"] = workspace.Id.ToString(),
@@ -1168,6 +1209,29 @@ public sealed class ParaBrowserPage : ContentPage, IQueryAttributable
                 ["returnRoute"] = _viewModel.WorkspaceReturnRoute,
             });
     }
+
+    private void ResetBrowserContinuation()
+    {
+        _browserReturnRoute = "para";
+        _returnEditorItemKind = null;
+        _returnEditorJournalId = null;
+        _returnEditorFinalRoute = "para";
+        _returnInboxProcessItemId = null;
+    }
+
+    private static string NormalizeContextReturnRoute(string? route) =>
+        route?.Trim().ToLowerInvariant() switch
+        {
+            "home" => "home",
+            "inbox" => "inbox",
+            "inbox-process" => "inbox-process",
+            "search" => "search",
+            "journals" => "journals",
+            "review" => "review",
+            "data-import" => "data-import",
+            "editor" => "editor",
+            _ => "para",
+        };
 
     private static bool TryGetQueryValue(
         IDictionary<string, object> query,
