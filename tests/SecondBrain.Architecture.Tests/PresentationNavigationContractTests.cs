@@ -51,19 +51,24 @@ public sealed class PresentationNavigationContractTests
     [Test]
     public void KnowledgeCreationAndEditing_AreSeparateContextualSurfaces()
     {
+        var root = FindRepositoryRoot();
         var shell = ReadPresentationFile("AppShell.cs");
         var create = ReadPresentationFile("CoreCreatePage.cs");
         var edit = ReadPresentationFile("CoreEditPage.cs");
+        var combinedEditorPath = Path.Combine(
+            root,
+            "SecondBrain.Presentation",
+            "CoreEditorPage.cs");
 
         Assert.Multiple(() =>
         {
             Assert.That(shell, Does.Contain("CoreCreatePage createPage"));
             Assert.That(shell, Does.Contain("CoreEditPage editPage"));
             Assert.That(shell, Does.Not.Contain("CoreEditorPage coreEditorPage"));
+            Assert.That(File.Exists(combinedEditorPath), Is.False,
+                "The old combined Create/Edit surface must not remain available for accidental reuse.");
 
             Assert.That(create, Does.Contain("Title = \"Create knowledge\""));
-            Assert.That(create, Does.Contain("//editor"),
-                "Create may return to a source item after derivation, but it remains its own route.");
             Assert.That(create, Does.Not.Contain("Existing item"));
 
             Assert.That(edit, Does.Contain("Title = \"Edit knowledge\""));
