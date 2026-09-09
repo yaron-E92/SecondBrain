@@ -50,6 +50,12 @@ public sealed class CoreCreatePage : ContentPage, IQueryAttributable
         _startButton = SecondBrainVisual.PrimaryButton("Start creating", "CreateKnowledgeStart");
         _startButton.Clicked += async (_, _) => await BeginSelectedAsync();
 
+        var manageHomes = SecondBrainVisual.SecondaryButton(
+            "Manage Projects, Areas & Resources",
+            "CreateKnowledgeManageHomes");
+        manageHomes.HorizontalOptions = LayoutOptions.Start;
+        manageHomes.Clicked += async (_, _) => await ManageHomesAsync();
+
         _message = SecondBrainVisual.Body(string.Empty);
         _message.TextColor = SecondBrainVisual.Danger;
 
@@ -94,7 +100,11 @@ public sealed class CoreCreatePage : ContentPage, IQueryAttributable
                         SecondBrainVisual.SectionTitle("Type and home"),
                         _kindPicker,
                         _placementPicker,
-                        _startButton,
+                        new HorizontalStackLayout
+                        {
+                            Spacing = 10,
+                            Children = { _startButton, manageHomes },
+                        },
                         _message),
                     _form,
                     busy,
@@ -184,6 +194,33 @@ public sealed class CoreCreatePage : ContentPage, IQueryAttributable
         {
             _message.Text = $"Creation choices could not be loaded. {exception.Message}";
         }
+    }
+
+    private async Task ManageHomesAsync()
+    {
+        if (_form.IsVisible)
+        {
+            await DisplayAlertAsync(
+                "Creation in progress",
+                "Save or cancel this draft before changing your PARA homes.",
+                "OK");
+            return;
+        }
+
+        var kind = _kindPicker.SelectedItem is BrainItemKind selectedKind
+            ? selectedKind
+            : BrainItemKind.Note;
+        var journalId = _pendingJournalId?.Value.ToString() ?? string.Empty;
+        await Shell.Current.GoToAsync(
+            "//para",
+            new Dictionary<string, object>
+            {
+                ["mode"] = "browse",
+                ["returnRoute"] = "editor",
+                ["itemKind"] = kind.ToString(),
+                ["journalId"] = journalId,
+                ["editorReturnRoute"] = _returnRoute,
+            });
     }
 
     private async Task BeginSelectedAsync()
@@ -351,9 +388,11 @@ public sealed class CoreCreatePage : ContentPage, IQueryAttributable
         {
             "home" => "home",
             "inbox" => "inbox",
+            "inbox-process" => "inbox-process",
             "search" => "search",
             "journals" => "journals",
             "review" => "review",
+            "data-import" => "data-import",
             "editor" => "editor",
             _ => "para",
         };
