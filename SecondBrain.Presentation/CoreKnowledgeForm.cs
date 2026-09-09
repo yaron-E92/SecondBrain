@@ -195,9 +195,10 @@ internal sealed class CoreKnowledgeForm : VerticalStackLayout
 
     private void AddTypedCard(string title, string visibilityProperty, params View[] children)
     {
-        var card = SecondBrainVisual.Card(
-            SecondBrainVisual.Eyebrow(title),
-            children);
+        var cardChildren = new View[children.Length + 1];
+        cardChildren[0] = SecondBrainVisual.Eyebrow(title);
+        Array.Copy(children, 0, cardChildren, 1, children.Length);
+        var card = SecondBrainVisual.Card(cardChildren);
         card.SetBinding(IsVisibleProperty, visibilityProperty);
         Children.Add(card);
     }
