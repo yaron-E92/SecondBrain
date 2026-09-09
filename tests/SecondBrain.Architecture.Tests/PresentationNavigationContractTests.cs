@@ -70,6 +70,8 @@ public sealed class PresentationNavigationContractTests
 
             Assert.That(create, Does.Contain("Title = \"Create knowledge\""));
             Assert.That(create, Does.Not.Contain("Existing item"));
+            Assert.That(create, Does.Contain("ResetSurface();"),
+                "The contextual creation page must reset drafts and controls between route entries.");
 
             Assert.That(edit, Does.Contain("Title = \"Edit knowledge\""));
             Assert.That(edit, Does.Contain("Creation is a separate flow."));
