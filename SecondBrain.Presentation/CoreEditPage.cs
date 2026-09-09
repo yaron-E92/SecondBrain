@@ -16,6 +16,7 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
     private readonly Border _relationshipCard;
     private readonly Border _captureCard;
     private SecondBrainItemId? _pendingItemId;
+    private IDictionary<string, object>? _pendingCreateForward;
     private string _returnRoute = "para";
     private BrainItem? _currentItem;
 
@@ -119,6 +120,13 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        if (_pendingCreateForward is { } forward)
+        {
+            _pendingCreateForward = null;
+            await Shell.Current.GoToAsync("//create", forward);
+            return;
+        }
+
         if (_pendingItemId is { } itemId)
         {
             await LoadAsync(itemId);
@@ -130,13 +138,13 @@ public sealed class CoreEditPage : ContentPage, IQueryAttributable
         if (string.Equals(Value(query, "mode"), "create", StringComparison.OrdinalIgnoreCase))
         {
             _pendingItemId = null;
-            var forwarded = query
+            _pendingCreateForward = query
                 .Where(pair => !string.Equals(pair.Key, "mode", StringComparison.OrdinalIgnoreCase))
                 .ToDictionary(pair => pair.Key, pair => pair.Value);
-            Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//create", forwarded));
             return;
         }
 
+        _pendingCreateForward = null;
         _pendingItemId = TryId(query, "itemId");
         _returnRoute = NormalizeReturnRoute(Value(query, "returnRoute"));
     }
