@@ -48,13 +48,23 @@ public sealed class InboxProcessPage : ContentPage, IQueryAttributable
         var manageHomes = SecondBrainVisual.SecondaryButton(
             "Manage Projects, Areas & Resources",
             "ProcessManageHomes");
-        manageHomes.Clicked += async (_, _) => await Shell.Current.GoToAsync(
-            "//para",
-            new Dictionary<string, object>
+        manageHomes.Clicked += async (_, _) =>
+        {
+            var itemId = _viewModel.ItemId ?? _pendingItemId;
+            if (itemId is null)
             {
-                ["mode"] = "browse",
-                ["returnRoute"] = "inbox-process",
-            });
+                return;
+            }
+
+            await Shell.Current.GoToAsync(
+                "//para",
+                new Dictionary<string, object>
+                {
+                    ["mode"] = "browse",
+                    ["returnRoute"] = "inbox-process",
+                    ["itemId"] = itemId.Value.Value.ToString(),
+                });
+        };
 
         var process = SecondBrainVisual.PrimaryButton(
             "Process item",
