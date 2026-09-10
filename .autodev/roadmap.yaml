@@ -1,14 +1,35 @@
 version: 1
 priority:
-  # Product correction gate: replace the transitional Shell/IA first, then finish
-  # the already-landed import journey against that stable product composition.
-  # UX/presentation issues are not product-complete from CI alone: their named
-  # running-product journey must be exercised against the pinned UX artifact.
+  # Product-correction wave. #138 is the governing SecondBrain provenance contract;
+  # generic AutoDev provenance enforcement is tracked by yaron-E92/AutoDev#335.
+  # #138 is therefore not itself scheduled as an application implementation issue.
+  # UX/presentation work is not complete from CI/code inspection alone: run the
+  # named user journey and compare artifact-covered states against the pinned UX
+  # authority, with unavailable provenance layers reported as not verified.
   - issue: 125
+
+  # Repair the highest-friction lifecycle/navigation journeys first: focused
+  # context creation, in-place Home creation, then clear Browse/workspace/item
+  # boundaries. These establish stable destinations before richer data is shown.
+  - issue: 134
+  - issue: 135
+  - issue: 137
+
+  # Enrich the Core model deliberately, then expose those semantics through
+  # complete type-specific editing and restrained collection/workspace summaries.
+  # Home remains primary placement; secondary associations are typed relations.
+  - issue: 139
+  - issue: 140
+  - issue: 136
+  - issue: 141
+
+  # Finish the existing Notion migration journey against the corrected product
+  # model. Import success includes visible preservation/deferment of supported
+  # metadata and relations, not merely row creation.
   - issue: 43
 
   # Standalone SecondBrain value and data safety come before ecosystem breadth.
-  # These journeys should build on #125's stable navigation/settings composition.
+  # These journeys build on the corrected navigation/settings composition.
   - issue: 68
   - issue: 69
   - issue: 66
@@ -20,8 +41,9 @@ priority:
   - issue: 47
   - issue: 48
 
-  # Harden Notion vocabulary only after the Settings/Data information architecture
-  # is stable; keep mapping-v1 semantics conservative until then.
+  # Harden Notion vocabulary after the import/product semantics are stable.
+  # Preserve immutable mapping-version meaning and expose shipped-vs-user alias
+  # provenance rather than turning aliases into semantic remapping.
   - issue: 129
 
   # Opt into ShuffleTask, see useful work, open it, and return while preserving
@@ -34,7 +56,8 @@ priority:
   - issue: 52
   - issue: 53
 
-  # Search Core and enabled modules with source ownership and safe degradation.
+  # Search Core and enabled modules with source ownership, restrained metadata,
+  # canonical deep links, and safe partial-provider degradation.
   - issue: 54
   - issue: 55
   - issue: 56
@@ -66,6 +89,9 @@ priority:
   - issue: 111
 
 # Intentionally omitted from active priority:
+# - #138: governing SecondBrain UX-provenance contract; generic engine enforcement
+#   is AutoDev#335, and #138 should be validated through subsequent UX work rather
+#   than treated as a standalone application feature.
 # - #70: its own contract defers sync research until a concrete sync consumer exists.
 # - #92-#94: tracker issues; implementation readiness belongs to their child issues.
 # - completed foundational issues such as #100-#103 and #102.
