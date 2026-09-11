@@ -110,8 +110,12 @@ public sealed class PresentationNavigationContractTests
             Assert.That(browse, Does.Contain("_returnInboxProcessItemId"));
             Assert.That(browse, Does.Contain("[\"contextKind\"] = savedContext.Kind.ToString()"),
                 "A newly-created PARA home must be carried back into the focused Create flow.");
-            Assert.That(browse, Does.Contain("await Shell.Current.GoToAsync(\n                    \"//create\""),
-                "Workspace creation buttons should target the Create surface directly.");
+            Assert.That(browse, Does.Contain("private async Task OpenWorkspaceCreateAsync(BrainItemKind kind)"),
+                "Workspace creation should have a dedicated contextual navigation path.");
+            Assert.That(browse, Does.Contain("\"//create\","),
+                "Workspace creation buttons should target the Create surface directly without depending on source formatting.");
+            Assert.That(browse, Does.Contain("[\"itemKind\"] = target.Kind.ToString()"),
+                "Workspace creation must preserve the requested knowledge kind when entering the Create surface.");
             Assert.That(process, Does.Contain("[\"itemId\"] = itemId.Value.Value.ToString()"),
                 "Managing homes while processing must preserve the Inbox item identity.");
             Assert.That(journals, Does.Contain("\"//create\""));
