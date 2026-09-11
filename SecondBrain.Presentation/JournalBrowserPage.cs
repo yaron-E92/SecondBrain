@@ -313,10 +313,9 @@ public sealed class JournalBrowserPage : ContentPage
         }
 
         await Shell.Current.GoToAsync(
-            "//editor",
+            "//create",
             new Dictionary<string, object>
             {
-                ["mode"] = "create",
                 ["itemKind"] = BrainItemKind.JournalEntry.ToString(),
                 ["journalId"] = journal.Id.Value.ToString(),
                 ["returnRoute"] = "journals",

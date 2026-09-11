@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SecondBrain.Abstractions.Search;
 using SecondBrain.Application.Ports;
 using SecondBrain.Domain.Entities;
 
@@ -15,10 +16,27 @@ public sealed record CoreSearchPlacementOption(
 
 public sealed record CoreSearchArchiveOption(string Label, bool? IsArchived);
 
-public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
+public sealed record FederatedSearchItem(
+    string SourceId,
+    string SourceName,
+    string Id,
+    string Title,
+    string Preview,
+    string OpenRoute);
+
+public sealed record SearchProviderFailure(
+    string SourceId,
+    string SourceName,
+    string Message);
+
+public sealed partial class CoreSearchViewModel(
+    ICoreSearchQueryService queries,
+    IEnumerable<ISecondBrainSearchProvider>? searchProviders = null)
     : ObservableObject
 {
     private const int PageSize = 20;
+    private readonly IReadOnlyList<ISecondBrainSearchProvider> _searchProviders =
+        (searchProviders ?? []).ToArray();
     private int _nextOffset;
 
     [ObservableProperty]
@@ -77,6 +95,15 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
     public partial IReadOnlyList<CoreSearchItem> RecentItems { get; set; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFederatedResults))]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    public partial IReadOnlyList<FederatedSearchItem> FederatedResults { get; set; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProviderFailures))]
+    public partial IReadOnlyList<SearchProviderFailure> ProviderFailures { get; set; } = [];
+
+    [ObservableProperty]
     public partial CoreSearchItem? SelectedResult { get; set; }
 
     [ObservableProperty]
@@ -101,13 +128,18 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
     public bool HasResults => Results.Count > 0;
 
     public bool IsEmpty =>
-        Results.Count == 0 && Favorites.Count == 0 && RecentItems.Count == 0;
+        Results.Count == 0 && FederatedResults.Count == 0 &&
+        Favorites.Count == 0 && RecentItems.Count == 0;
 
     public bool AreFavoritesEmpty => Favorites.Count == 0;
 
     public bool AreRecentItemsEmpty => RecentItems.Count == 0;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    public bool HasFederatedResults => FederatedResults.Count > 0;
+
+    public bool HasProviderFailures => ProviderFailures.Count > 0;
 
     [RelayCommand]
     private async Task LoadAsync(CancellationToken cancellationToken)
@@ -121,6 +153,7 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
             Favorites = await queries.GetFavoritesAsync(5, cancellationToken);
             RecentItems = await queries.GetRecentAsync(5, cancellationToken);
             await SearchCoreAsync(false, cancellationToken);
+            await SearchProvidersAsync(cancellationToken);
             AreResultsStale = false;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -131,6 +164,7 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
         {
             AreResultsStale = Results.Count > 0;
             ErrorMessage = $"Search could not be loaded. {exception.Message}";
+            await SearchProvidersAsync(cancellationToken);
         }
         finally
         {
@@ -146,6 +180,7 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
         try
         {
             await SearchCoreAsync(false, cancellationToken);
+            await SearchProvidersAsync(cancellationToken);
             AreResultsStale = false;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -156,6 +191,7 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
         {
             AreResultsStale = Results.Count > 0;
             ErrorMessage = $"Search failed. {exception.Message}";
+            await SearchProvidersAsync(cancellationToken);
         }
         finally
         {
@@ -236,6 +272,78 @@ public sealed partial class CoreSearchViewModel(ICoreSearchQueryService queries)
             1 => "1 result",
             _ => $"{page.TotalCount} results",
         };
+    }
+
+    [RelayCommand]
+    private async Task RetryProviderAsync(
+        SearchProviderFailure failure,
+        CancellationToken cancellationToken)
+    {
+        var provider = _searchProviders.FirstOrDefault(candidate =>
+            string.Equals(candidate.SourceId, failure.SourceId, StringComparison.Ordinal));
+        if (provider is null)
+        {
+            return;
+        }
+
+        await SearchProviderAsync(provider, cancellationToken);
+    }
+
+    private async Task SearchProvidersAsync(CancellationToken cancellationToken)
+    {
+        foreach (var provider in _searchProviders)
+        {
+            await SearchProviderAsync(provider, cancellationToken);
+        }
+    }
+
+    private async Task SearchProviderAsync(
+        ISecondBrainSearchProvider provider,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var results = await provider.SearchAsync(
+                new SecondBrainSearchRequest(QueryText),
+                cancellationToken);
+            FederatedResults =
+            [
+                .. FederatedResults.Where(item => !string.Equals(
+                    item.SourceId,
+                    provider.SourceId,
+                    StringComparison.Ordinal)),
+                .. results.Select(item => new FederatedSearchItem(
+                    provider.SourceId,
+                    provider.DisplayName,
+                    item.Id,
+                    item.Title,
+                    item.Preview,
+                    item.OpenRoute)),
+            ];
+            ProviderFailures = ProviderFailures.Where(item => !string.Equals(
+                item.SourceId,
+                provider.SourceId,
+                StringComparison.Ordinal)).ToArray();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            var failure = new SearchProviderFailure(
+                provider.SourceId,
+                provider.DisplayName,
+                $"{provider.DisplayName} is unavailable. Other results remain usable. {exception.Message}");
+            ProviderFailures =
+            [
+                .. ProviderFailures.Where(item => !string.Equals(
+                    item.SourceId,
+                    provider.SourceId,
+                    StringComparison.Ordinal)),
+                failure,
+            ];
+        }
     }
 
     private void ApplyOptions(CoreSearchFilterOptions options)

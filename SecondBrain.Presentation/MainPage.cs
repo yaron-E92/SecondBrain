@@ -1,107 +1,200 @@
-using SecondBrain.Presentation.ViewModels;
-using SecondBrain.Application.UseCases;
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Layouts;
+using SecondBrain.Application.UseCases;
+using SecondBrain.Presentation.ViewModels;
 
 namespace SecondBrain.Presentation;
 
 public sealed class MainPage : ContentPage
 {
-    private readonly DashboardViewModel viewModel;
+    private readonly DashboardViewModel _viewModel;
+    private readonly Editor _captureEditor;
 
     public MainPage(DashboardViewModel viewModel)
     {
-        this.viewModel = viewModel;
+        _viewModel = viewModel;
         BindingContext = viewModel;
         Title = "Home";
-        BackgroundColor = Colors.White;
+        BackgroundColor = SecondBrainVisual.Background;
 
-        var captureEditor = new Editor
+        _captureEditor = new Editor
         {
             AutoSize = EditorAutoSizeOption.TextChanges,
-            MinimumHeightRequest = 88,
-            Placeholder = "Capture a thought while it is fresh..."
+            MinimumHeightRequest = 110,
+            Placeholder = "What do you want to remember?",
+            AutomationId = "HomeCaptureText",
         };
-        captureEditor.SetBinding(Editor.TextProperty, nameof(viewModel.CaptureText));
+        _captureEditor.SetBinding(Editor.TextProperty, nameof(viewModel.CaptureText));
 
-        var captureButton = new Button
-        {
-            Text = "Save to Inbox",
-            HorizontalOptions = LayoutOptions.End
-        };
-        captureButton.SetBinding(
-            Button.CommandProperty,
-            nameof(viewModel.CaptureCommand));
+        var capture = SecondBrainVisual.PrimaryButton("Save to Inbox", "HomeCaptureSave");
+        capture.HorizontalOptions = LayoutOptions.End;
+        capture.SetBinding(Button.CommandProperty, nameof(viewModel.CaptureCommand));
 
         var captureStatus = new Label
         {
             FontSize = 13,
-            TextColor = Colors.DarkGreen
+            TextColor = SecondBrainVisual.Success,
         };
         captureStatus.SetBinding(Label.TextProperty, nameof(viewModel.CaptureStatus));
 
-        var refreshView = new RefreshView
-        {
-            Content = new ScrollView
+        var captureCard = SecondBrainVisual.Card(
+            SecondBrainVisual.Eyebrow("Capture"),
+            SecondBrainVisual.SectionTitle("Get it out of your head"),
+            SecondBrainVisual.Body(
+                "Capture first. You can decide what it is and where it belongs when you process Inbox."),
+            _captureEditor,
+            capture,
+            captureStatus);
+
+        var processInbox = SecondBrainVisual.PrimaryButton("Process Inbox", "HomeProcessInbox");
+        processInbox.Clicked += async (_, _) => await Shell.Current.GoToAsync("//inbox");
+
+        var review = SecondBrainVisual.SecondaryButton("Start Review", "HomeStartReview");
+        review.Clicked += async (_, _) => await Shell.Current.GoToAsync(
+            "//review",
+            new Dictionary<string, object>
             {
-                Content = new VerticalStackLayout
+                ["kind"] = "para",
+                ["returnRoute"] = "home",
+            });
+
+        var attentionCard = SecondBrainVisual.Card(
+            SecondBrainVisual.Eyebrow("Attention"),
+            SecondBrainVisual.SectionTitle("What needs attention"),
+            SecondBrainVisual.Body(
+                "Process captured thoughts into useful homes, or enter Review when you want deliberate maintenance."),
+            new FlexLayout
+            {
+                Direction = FlexDirection.Row,
+                Wrap = FlexWrap.Wrap,
+                AlignItems = FlexAlignItems.Center,
+                Children = { processInbox, review },
+            });
+
+        var inbox = ItemSection(
+            "Inbox",
+            "Thoughts waiting for a home",
+            nameof(viewModel.InboxItems),
+            nameof(viewModel.IsInboxEmpty),
+            "Inbox is clear.",
+            "inbox-process",
+            "Process · choose its home",
+            "home");
+
+        var projects = ProjectSection(viewModel);
+        var favorites = ItemSection(
+            "Favorites",
+            "Knowledge you chose to keep close",
+            nameof(viewModel.Favorites),
+            nameof(viewModel.AreFavoritesEmpty),
+            "No favorites yet.",
+            "editor",
+            null,
+            "home");
+        var recent = ItemSection(
+            "Recent",
+            "Recently changed knowledge",
+            nameof(viewModel.RecentItems),
+            nameof(viewModel.AreRecentItemsEmpty),
+            "Your recently updated items will appear here.",
+            "editor",
+            null,
+            "home");
+
+        var failure = FailureState(viewModel);
+        var loading = new ActivityIndicator
+        {
+            Color = SecondBrainVisual.Accent,
+            HorizontalOptions = LayoutOptions.Start,
+        };
+        loading.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsLoading));
+        loading.SetBinding(IsVisibleProperty, nameof(viewModel.IsLoading));
+
+        var body = new VerticalStackLayout
+        {
+            Padding = new Thickness(24, 20, 24, 36),
+            Spacing = 18,
+            MaximumWidthRequest = 1180,
+            HorizontalOptions = LayoutOptions.Fill,
+            Children =
+            {
+                new VerticalStackLayout
                 {
-                    Padding = new Thickness(20, 16),
-                    Spacing = 20,
+                    Spacing = 4,
                     Children =
                     {
-                        Header("SecondBrain", "Your offline workspace"),
-                        FailureState(
-                            nameof(viewModel.HasError),
-                            nameof(viewModel.ErrorMessage),
-                            nameof(viewModel.LoadCommand)),
-                        LoadingState(nameof(viewModel.IsLoading)),
-                        Section(
-                            "Quick capture",
-                            captureEditor,
-                            captureButton,
-                            captureStatus),
-                        Section(
-                            "Review",
-                            ReviewButton("Start Inbox review", "inbox", "home"),
-                            ReviewButton("Review due PARA items", "para", "home")),
-                        ItemSection(
-                            "Inbox",
-                            nameof(viewModel.InboxItems),
-                            nameof(viewModel.IsInboxEmpty),
-                            "Inbox is clear. Capture a thought above.",
-                            "home",
-                            "Open to create a Note or Resource"),
-                        ProjectSection(viewModel),
-                        ItemSection(
-                            "Favorites",
-                            nameof(viewModel.Favorites),
-                            nameof(viewModel.AreFavoritesEmpty),
-                            "Mark an item as a favorite to keep it close.",
-                            "home"),
-                        ItemSection(
-                            "Recent",
-                            nameof(viewModel.RecentItems),
-                            nameof(viewModel.AreRecentItemsEmpty),
-                            "Your recently updated items will appear here.",
-                            "home"),
-                        ModuleSection(viewModel)
-                    }
-                }
-            }
+                        SecondBrainVisual.Eyebrow("Offline workspace"),
+                        SecondBrainVisual.PageTitle("Home"),
+                        SecondBrainVisual.Body("Capture quickly. Process deliberately. Find what matters."),
+                    },
+                },
+                failure,
+                loading,
+                ResponsiveWorkspace(captureCard, attentionCard, inbox, projects, favorites, recent),
+            },
         };
-        refreshView.SetBinding(
-            RefreshView.IsRefreshingProperty,
-            nameof(viewModel.IsRefreshing));
-        refreshView.SetBinding(
-            RefreshView.CommandProperty,
-            nameof(viewModel.LoadCommand));
-        Content = refreshView;
+
+        var refresh = new RefreshView
+        {
+            Content = new ScrollView { Content = Centered(body, 1180) },
+        };
+        refresh.SetBinding(RefreshView.IsRefreshingProperty, nameof(viewModel.IsRefreshing));
+        refresh.SetBinding(RefreshView.CommandProperty, nameof(viewModel.LoadCommand));
+        Content = refresh;
+    }
+
+    public void FocusCapture()
+    {
+        Dispatcher.DispatchDelayed(
+            TimeSpan.FromMilliseconds(120),
+            () => _captureEditor.Focus());
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await viewModel.LoadCommand.ExecuteAsync(null);
+        await _viewModel.LoadCommand.ExecuteAsync(null);
+    }
+
+    private static View ResponsiveWorkspace(
+        View capture,
+        View attention,
+        View inbox,
+        View projects,
+        View favorites,
+        View recent)
+    {
+        if (DeviceInfo.Idiom != DeviceIdiom.Desktop)
+        {
+            return new VerticalStackLayout
+            {
+                Spacing = 16,
+                Children = { capture, attention, inbox, projects, favorites, recent },
+            };
+        }
+
+        var left = new VerticalStackLayout
+        {
+            Spacing = 16,
+            Children = { capture, inbox, projects },
+        };
+        var right = new VerticalStackLayout
+        {
+            Spacing = 16,
+            Children = { attention, favorites, recent },
+        };
+        var grid = new Grid
+        {
+            ColumnSpacing = 18,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(1.35, GridUnitType.Star)),
+                new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
+            },
+            Children = { left, right },
+        };
+        Grid.SetColumn(right, 1);
+        return grid;
     }
 
     private static View ProjectSection(DashboardViewModel viewModel)
@@ -109,32 +202,31 @@ public sealed class MainPage : ContentPage
         var collection = new CollectionView
         {
             SelectionMode = SelectionMode.Single,
+            MaximumHeightRequest = 260,
             ItemTemplate = new DataTemplate(() =>
             {
                 var name = new Label
                 {
                     FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black
+                    TextColor = SecondBrainVisual.Ink,
                 };
                 name.SetBinding(Label.TextProperty, nameof(DashboardProject.Name));
                 var outcome = new Label
                 {
                     FontSize = 13,
-                    TextColor = Colors.DarkSlateGray
+                    TextColor = SecondBrainVisual.Muted,
+                    MaxLines = 2,
                 };
-                outcome.SetBinding(
-                    Label.TextProperty,
-                    nameof(DashboardProject.Outcome));
+                outcome.SetBinding(Label.TextProperty, nameof(DashboardProject.Outcome));
                 return new VerticalStackLayout
                 {
-                    Padding = new Thickness(0, 6),
-                    Children = { name, outcome }
+                    Padding = new Thickness(4, 8),
+                    Spacing = 3,
+                    Children = { name, outcome },
                 };
-            })
+            }),
         };
-        collection.SetBinding(
-            ItemsView.ItemsSourceProperty,
-            nameof(viewModel.ActiveProjects));
+        collection.SetBinding(ItemsView.ItemsSourceProperty, nameof(viewModel.ActiveProjects));
         collection.SelectionChanged += async (_, args) =>
         {
             if (args.CurrentSelection.FirstOrDefault() is not DashboardProject project)
@@ -153,74 +245,74 @@ public sealed class MainPage : ContentPage
                 });
         };
 
-        var manageProjects = new Button
-        {
-            Text = "Create or manage Projects",
-            HorizontalOptions = LayoutOptions.Start
-        };
-        manageProjects.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync(
-                "//para",
-                new Dictionary<string, object> { ["mode"] = "browse" });
+        var manage = SecondBrainVisual.QuietButton("Manage Projects", "HomeManageProjects");
+        manage.HorizontalOptions = LayoutOptions.Start;
+        manage.Clicked += async (_, _) => await Shell.Current.GoToAsync(
+            "//para",
+            new Dictionary<string, object> { ["mode"] = "browse" });
 
-        return Section(
-            "Current Projects",
-            EmptyState(
-                nameof(viewModel.AreProjectsEmpty),
-                "No Projects yet. Create one to give current work a home."),
-            manageProjects,
-            collection);
+        var empty = EmptyState(
+            nameof(viewModel.AreProjectsEmpty),
+            "No Projects yet. Create one when a piece of work needs an outcome and an end.");
+
+        return SecondBrainVisual.Card(
+            SecondBrainVisual.Eyebrow("Browse"),
+            SecondBrainVisual.SectionTitle("Current Projects"),
+            empty,
+            collection,
+            manage);
     }
 
     private static View ItemSection(
         string title,
+        string subtitle,
         string itemsProperty,
         string emptyProperty,
         string emptyMessage,
-        string returnRoute,
-        string? rowHint = null)
+        string openRoute,
+        string? rowHint,
+        string returnRoute)
     {
         var collection = new CollectionView
         {
             SelectionMode = SelectionMode.Single,
+            MaximumHeightRequest = 260,
             ItemTemplate = new DataTemplate(() =>
             {
                 var titleLabel = new Label
                 {
                     FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black,
-                    LineBreakMode = LineBreakMode.TailTruncation
+                    TextColor = SecondBrainVisual.Ink,
+                    LineBreakMode = LineBreakMode.TailTruncation,
                 };
-                titleLabel.SetBinding(
-                    Label.TextProperty,
-                    nameof(DashboardItem.Title));
-                var content = new Label
+                titleLabel.SetBinding(Label.TextProperty, nameof(DashboardItem.Title));
+                var preview = new Label
                 {
                     FontSize = 13,
                     MaxLines = 2,
-                    TextColor = Colors.DarkSlateGray,
-                    LineBreakMode = LineBreakMode.TailTruncation
+                    TextColor = SecondBrainVisual.Muted,
+                    LineBreakMode = LineBreakMode.TailTruncation,
                 };
-                content.SetBinding(
-                    Label.TextProperty,
-                    nameof(DashboardItem.Content));
-                var layout = new VerticalStackLayout
+                preview.SetBinding(Label.TextProperty, nameof(DashboardItem.Content));
+                var stack = new VerticalStackLayout
                 {
-                    Padding = new Thickness(0, 6),
-                    Children = { titleLabel, content }
+                    Padding = new Thickness(4, 8),
+                    Spacing = 3,
+                    Children = { titleLabel, preview },
                 };
-                if (rowHint is not null)
+                if (!string.IsNullOrWhiteSpace(rowHint))
                 {
-                    layout.Children.Add(new Label
+                    stack.Children.Add(new Label
                     {
                         Text = rowHint,
                         FontSize = 12,
-                        TextColor = Colors.DarkSlateBlue
+                        FontAttributes = FontAttributes.Bold,
+                        TextColor = SecondBrainVisual.Accent,
                     });
                 }
 
-                return layout;
-            })
+                return stack;
+            }),
         };
         collection.SetBinding(ItemsView.ItemsSourceProperty, itemsProperty);
         collection.SelectionChanged += async (_, args) =>
@@ -231,243 +323,139 @@ public sealed class MainPage : ContentPage
             }
 
             collection.SelectedItem = null;
-            await OpenItemAsync(item, returnRoute);
+            await OpenItemAsync(item, openRoute, returnRoute);
         };
 
-        return Section(
-            title,
+        return SecondBrainVisual.Card(
+            SecondBrainVisual.SectionTitle(title),
+            SecondBrainVisual.Body(subtitle),
             EmptyState(emptyProperty, emptyMessage),
             collection);
     }
 
-    private static async Task OpenItemAsync(
+    private static Task OpenItemAsync(
         DashboardItem item,
-        string returnRoute) =>
-        await Shell.Current.GoToAsync(
-            "//editor",
-            new Dictionary<string, object>
-            {
-                ["itemId"] = item.Id.Value.ToString(),
-                ["returnRoute"] = returnRoute,
-            });
-
-    private static View ModuleSection(DashboardViewModel viewModel)
-    {
-        var collection = new CollectionView
-        {
-            ItemTemplate = new DataTemplate(() =>
-            {
-                var name = new Label
-                {
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black
-                };
-                name.SetBinding(Label.TextProperty, nameof(DashboardModuleSlot.Name));
-                var emptyMessage = new Label
-                {
-                    FontSize = 13,
-                    TextColor = Colors.DarkSlateGray
-                };
-                emptyMessage.SetBinding(
-                    Label.TextProperty,
-                    nameof(DashboardModuleSlot.EmptyMessage));
-                return new Border
-                {
-                    Stroke = Colors.LightGray,
-                    StrokeShape = new RoundRectangle { CornerRadius = 8 },
-                    Padding = 12,
-                    Content = new VerticalStackLayout
-                    {
-                        Children = { name, emptyMessage }
-                    }
-                };
-            })
-        };
-        collection.SetBinding(
-            ItemsView.ItemsSourceProperty,
-            nameof(viewModel.ModuleSlots));
-
-        return Section(
-            "Module extensions",
-            EmptyState(
-                nameof(viewModel.AreModuleSlotsEmpty),
-                "No optional modules are enabled."),
-            collection);
-    }
-
-    private static Button ReviewButton(
-        string text,
-        string kind,
+        string route,
         string returnRoute)
     {
-        var button = new Button
+        var parameters = new Dictionary<string, object>
         {
-            Text = text,
-            HorizontalOptions = LayoutOptions.Start,
+            ["itemId"] = item.Id.Value.ToString(),
         };
-        button.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync(
-                "//review",
-                new Dictionary<string, object>
-                {
-                    ["kind"] = kind,
-                    ["returnRoute"] = returnRoute,
-                });
-        return button;
-    }
-
-    private static View Header(string title, string subtitle) =>
-        new VerticalStackLayout
+        if (route == "editor")
         {
-            Children =
-            {
-                new Label
-                {
-                    Text = title,
-                    FontSize = 30,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black
-                },
-                new Label
-                {
-                    Text = subtitle,
-                    FontSize = 15,
-                    TextColor = Colors.DarkSlateGray
-                }
-            }
-        };
-
-    private static View Section(string title, params View[] content)
-    {
-        var children = new List<IView>
-        {
-            new Label
-            {
-                Text = title,
-                FontSize = 20,
-                FontAttributes = FontAttributes.Bold,
-                TextColor = Colors.Black
-            }
-        };
-        children.AddRange(content);
-
-        var sectionContent = new VerticalStackLayout { Spacing = 8 };
-        foreach (var child in children)
-        {
-            sectionContent.Children.Add(child);
+            parameters["returnRoute"] = returnRoute;
         }
 
-        return new Border
-        {
-            Stroke = Colors.LightGray,
-            StrokeShape = new RoundRectangle { CornerRadius = 12 },
-            Padding = 16,
-            Content = sectionContent
-        };
+        return Shell.Current.GoToAsync($"//{route}", parameters);
     }
 
     private static View EmptyState(string visibilityProperty, string text)
     {
-        var label = new Label
-        {
-            Text = text,
-            FontSize = 13,
-            TextColor = Colors.DarkSlateGray
-        };
+        var label = SecondBrainVisual.Body(text);
         label.SetBinding(IsVisibleProperty, visibilityProperty);
         return label;
     }
 
-    private static View LoadingState(string loadingProperty)
+    private static View FailureState(DashboardViewModel viewModel)
     {
-        var indicator = new ActivityIndicator
-        {
-            Color = Colors.DarkSlateBlue,
-            HorizontalOptions = LayoutOptions.Center
-        };
-        indicator.SetBinding(
-            ActivityIndicator.IsRunningProperty,
-            loadingProperty);
-        indicator.SetBinding(IsVisibleProperty, loadingProperty);
-        return indicator;
+        var message = new Label { TextColor = SecondBrainVisual.Danger };
+        message.SetBinding(Label.TextProperty, nameof(viewModel.ErrorMessage));
+        var retry = SecondBrainVisual.SecondaryButton("Retry", "HomeRetry");
+        retry.HorizontalOptions = LayoutOptions.Start;
+        retry.SetBinding(Button.CommandProperty, nameof(viewModel.LoadCommand));
+        var card = SecondBrainVisual.Card(
+            SecondBrainVisual.SectionTitle("Home could not be loaded"),
+            message,
+            retry);
+        card.SetBinding(IsVisibleProperty, nameof(viewModel.HasError));
+        return card;
     }
 
-    private static View FailureState(
-        string visibilityProperty,
-        string messageProperty,
-        string retryCommandProperty)
+    private static Grid Centered(View view, double maxWidth)
     {
-        var message = new Label { TextColor = Colors.DarkRed };
-        message.SetBinding(Label.TextProperty, messageProperty);
-        var retryButton = new Button
+        view.MaximumWidthRequest = maxWidth;
+        var grid = new Grid
         {
-            Text = "Retry",
-            HorizontalOptions = LayoutOptions.Start
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(new GridLength(maxWidth)),
+                new ColumnDefinition(GridLength.Star),
+            },
+            Children = { view },
         };
-        retryButton.SetBinding(
-            Button.CommandProperty,
-            retryCommandProperty);
-        var layout = new VerticalStackLayout
+        Grid.SetColumn(view, 1);
+        grid.SizeChanged += (_, _) =>
         {
-            Spacing = 8,
-            Children = { message, retryButton }
+            if (grid.Width < maxWidth + 40)
+            {
+                grid.ColumnDefinitions[0].Width = 0;
+                grid.ColumnDefinitions[1].Width = GridLength.Star;
+                grid.ColumnDefinitions[2].Width = 0;
+            }
         };
-        layout.SetBinding(IsVisibleProperty, visibilityProperty);
-        return layout;
+        return grid;
     }
 }
 
 public sealed class InboxPage : ContentPage
 {
-    private readonly InboxViewModel viewModel;
+    private readonly InboxViewModel _viewModel;
 
     public InboxPage(InboxViewModel viewModel)
     {
-        this.viewModel = viewModel;
+        _viewModel = viewModel;
         BindingContext = viewModel;
-        Title = "Inbox";
-        BackgroundColor = Colors.White;
+        Title = "Process";
+        BackgroundColor = SecondBrainVisual.Background;
 
         var items = new CollectionView
         {
             SelectionMode = SelectionMode.Single,
+            AutomationId = "ProcessInboxList",
             ItemTemplate = new DataTemplate(() =>
             {
                 var title = new Label
                 {
+                    FontSize = 17,
                     FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.Black
+                    TextColor = SecondBrainVisual.Ink,
                 };
                 title.SetBinding(Label.TextProperty, nameof(DashboardItem.Title));
-                var content = new Label
+                var preview = new Label
                 {
-                    FontSize = 14,
+                    FontSize = 13,
                     MaxLines = 3,
-                    TextColor = Colors.DarkSlateGray,
-                    LineBreakMode = LineBreakMode.TailTruncation
+                    TextColor = SecondBrainVisual.Muted,
+                    LineBreakMode = LineBreakMode.TailTruncation,
                 };
-                content.SetBinding(
-                    Label.TextProperty,
-                    nameof(DashboardItem.Content));
-                var hint = new Label
-                {
-                    Text = "Open to create a Note or Resource",
-                    FontSize = 12,
-                    TextColor = Colors.DarkSlateBlue
-                };
+                preview.SetBinding(Label.TextProperty, nameof(DashboardItem.Content));
                 return new Border
                 {
-                    Stroke = Colors.LightGray,
-                    StrokeShape = new RoundRectangle { CornerRadius = 10 },
+                    BackgroundColor = SecondBrainVisual.Surface,
+                    Stroke = SecondBrainVisual.Line,
+                    StrokeShape = new RoundRectangle { CornerRadius = 12 },
                     Margin = new Thickness(0, 0, 0, 10),
-                    Padding = 14,
+                    Padding = 16,
                     Content = new VerticalStackLayout
                     {
-                        Spacing = 4,
-                        Children = { title, content, hint }
-                    }
+                        Spacing = 5,
+                        Children =
+                        {
+                            title,
+                            preview,
+                            new Label
+                            {
+                                Text = "Process · choose its home",
+                                FontSize = 12,
+                                FontAttributes = FontAttributes.Bold,
+                                TextColor = SecondBrainVisual.Accent,
+                            },
+                        },
+                    },
                 };
-            })
+            }),
         };
         items.SetBinding(ItemsView.ItemsSourceProperty, nameof(viewModel.Items));
         items.SelectionChanged += async (_, args) =>
@@ -479,125 +467,142 @@ public sealed class InboxPage : ContentPage
 
             items.SelectedItem = null;
             await Shell.Current.GoToAsync(
-                "//editor",
+                "//inbox-process",
                 new Dictionary<string, object>
                 {
                     ["itemId"] = item.Id.Value.ToString(),
-                    ["returnRoute"] = "inbox",
                 });
         };
 
-        var emptyMessage = new Label
+        var emptyTitle = new Label
         {
-            Text = "Inbox is clear. Use Home quick capture to add an item.",
+            Text = "Inbox is clear",
+            FontSize = 22,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = SecondBrainVisual.Success,
             HorizontalTextAlignment = TextAlignment.Center,
-            TextColor = Colors.DarkSlateGray
         };
-        emptyMessage.SetBinding(IsVisibleProperty, nameof(viewModel.IsEmpty));
+        emptyTitle.SetBinding(IsVisibleProperty, nameof(viewModel.IsEmpty));
+        var emptyBody = SecondBrainVisual.Body(
+            "Nothing is waiting for a home. Capture when something new comes up.");
+        emptyBody.HorizontalTextAlignment = TextAlignment.Center;
+        emptyBody.SetBinding(IsVisibleProperty, nameof(viewModel.IsEmpty));
 
-        var captureButton = new Button
+        var capture = SecondBrainVisual.PrimaryButton("+ Capture", "ProcessCapture");
+        capture.HorizontalOptions = LayoutOptions.Center;
+        capture.SetBinding(IsVisibleProperty, nameof(viewModel.IsEmpty));
+        capture.Clicked += async (_, _) =>
         {
-            Text = "Go to quick capture",
-            HorizontalOptions = LayoutOptions.Center
-        };
-        captureButton.SetBinding(IsVisibleProperty, nameof(viewModel.IsEmpty));
-        captureButton.Clicked += async (_, _) =>
             await Shell.Current.GoToAsync("//home");
-
-        var errorMessage = new Label { TextColor = Colors.DarkRed };
-        errorMessage.SetBinding(
-            Label.TextProperty,
-            nameof(viewModel.ErrorMessage));
-        errorMessage.SetBinding(
-            IsVisibleProperty,
-            nameof(viewModel.HasError));
-
-        var retryButton = new Button
-        {
-            Text = "Retry",
-            HorizontalOptions = LayoutOptions.Center
+            if (Shell.Current.CurrentPage is MainPage home)
+            {
+                home.FocusCapture();
+            }
         };
-        retryButton.SetBinding(
-            IsVisibleProperty,
-            nameof(viewModel.HasError));
-        retryButton.SetBinding(
-            Button.CommandProperty,
-            nameof(viewModel.LoadCommand));
+
+        var error = new Label { TextColor = SecondBrainVisual.Danger };
+        error.SetBinding(Label.TextProperty, nameof(viewModel.ErrorMessage));
+        error.SetBinding(IsVisibleProperty, nameof(viewModel.HasError));
+        var retry = SecondBrainVisual.SecondaryButton("Retry", "ProcessRetry");
+        retry.SetBinding(IsVisibleProperty, nameof(viewModel.HasError));
+        retry.SetBinding(Button.CommandProperty, nameof(viewModel.LoadCommand));
 
         var loading = new ActivityIndicator
         {
-            Color = Colors.DarkSlateBlue,
-            HorizontalOptions = LayoutOptions.Center
-        };
-        loading.SetBinding(
-            ActivityIndicator.IsRunningProperty,
-            nameof(viewModel.IsLoading));
-        loading.SetBinding(
-            IsVisibleProperty,
-            nameof(viewModel.IsLoading));
-
-        var heading = new Label
-        {
-            Text = "Captured thoughts",
-            FontSize = 28,
-            FontAttributes = FontAttributes.Bold,
-            TextColor = Colors.Black
-        };
-        var reviewButton = new Button
-        {
-            Text = "Start Inbox review",
+            Color = SecondBrainVisual.Accent,
             HorizontalOptions = LayoutOptions.Start,
         };
-        reviewButton.Clicked += async (_, _) =>
-            await Shell.Current.GoToAsync(
-                "//review",
-                new Dictionary<string, object>
-                {
-                    ["kind"] = "inbox",
-                    ["returnRoute"] = "inbox",
-                });
-        var statePanel = new VerticalStackLayout
-        {
-            Spacing = 8,
-            Children =
-            {
-                errorMessage,
-                retryButton,
-                emptyMessage,
-                captureButton
-            }
-        };
-        Grid.SetRow(heading, 0);
-        Grid.SetRow(reviewButton, 1);
-        Grid.SetRow(loading, 2);
-        Grid.SetRow(statePanel, 3);
-        Grid.SetRow(items, 4);
+        loading.SetBinding(ActivityIndicator.IsRunningProperty, nameof(viewModel.IsLoading));
+        loading.SetBinding(IsVisibleProperty, nameof(viewModel.IsLoading));
 
-        Content = new Grid
+        var review = SecondBrainVisual.QuietButton("Review Inbox deliberately", "ProcessReview");
+        review.HorizontalOptions = LayoutOptions.Start;
+        review.Clicked += async (_, _) => await Shell.Current.GoToAsync(
+            "//review",
+            new Dictionary<string, object>
+            {
+                ["kind"] = "inbox",
+                ["returnRoute"] = "inbox",
+            });
+
+        var body = new Grid
         {
-            Padding = 20,
+            Padding = new Thickness(24, 20, 24, 32),
+            MaximumWidthRequest = 940,
+            RowSpacing = 12,
             RowDefinitions =
             {
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
-                new RowDefinition(GridLength.Star)
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Star),
             },
-            Children =
-            {
-                heading,
-                reviewButton,
-                loading,
-                statePanel,
-                items
-            }
         };
+
+        var eyebrow = SecondBrainVisual.Eyebrow("Process");
+        var heading = SecondBrainVisual.PageTitle("Inbox");
+        var guidance = SecondBrainVisual.Body(
+            "Captured thoughts wait here only until you choose the right Project, Area, or Resource home.");
+        var empty = new VerticalStackLayout
+        {
+            Spacing = 8,
+            Children = { emptyTitle, emptyBody, capture },
+        };
+        var failure = new VerticalStackLayout
+        {
+            Spacing = 8,
+            Children = { error, retry },
+        };
+
+        AddRow(body, eyebrow, 0);
+        AddRow(body, heading, 1);
+        AddRow(body, guidance, 2);
+        AddRow(body, review, 3);
+        AddRow(body, loading, 4);
+        AddRow(body, failure, 5);
+        AddRow(body, empty, 5);
+        AddRow(body, items, 6);
+
+        Content = Centered(body, 940);
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await viewModel.LoadCommand.ExecuteAsync(null);
+        await _viewModel.LoadCommand.ExecuteAsync(null);
+    }
+
+    private static void AddRow(Grid grid, View view, int row)
+    {
+        Grid.SetRow(view, row);
+        grid.Children.Add(view);
+    }
+
+    private static Grid Centered(View view, double maxWidth)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(new GridLength(maxWidth)),
+                new ColumnDefinition(GridLength.Star),
+            },
+            Children = { view },
+        };
+        Grid.SetColumn(view, 1);
+        grid.SizeChanged += (_, _) =>
+        {
+            if (grid.Width < maxWidth + 40)
+            {
+                grid.ColumnDefinitions[0].Width = 0;
+                grid.ColumnDefinitions[1].Width = GridLength.Star;
+                grid.ColumnDefinitions[2].Width = 0;
+            }
+        };
+        return grid;
     }
 }
