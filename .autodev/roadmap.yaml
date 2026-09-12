@@ -23,6 +23,12 @@ priority:
   - issue: 136
   - issue: 141
 
+  # Journey: capture an outcome before every task is known. Workstreams are the
+  # semantic/portfolio container; workflow dependencies stay in Streamline and
+  # executable scheduling/recurrence stays in ShuffleTask. #143 has an explicit
+  # UX-design gap governed by #138 and must not copy task/workflow state into Core.
+  - issue: 143
+
   # Finish the existing Notion migration journey against the corrected product
   # model. Import success includes visible preservation/deferment of supported
   # metadata and relations, not merely row creation.
@@ -63,6 +69,12 @@ priority:
   - issue: 56
   - issue: 57
   - issue: 58
+
+  # Journey: review the portfolio, understand which outcomes can move, which are
+  # waiting, and where to continue. #144 consumes source-owned external summaries
+  # only after the relevant provider/navigation foundations above exist; it never
+  # recomputes Streamline readiness or ShuffleTask scheduling inside Core.
+  - issue: 144
 
   # Find PHOODAB-owned information and preview replenishment with zero side effects.
   - issue: 59
