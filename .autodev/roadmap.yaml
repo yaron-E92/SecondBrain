@@ -70,6 +70,12 @@ priority:
   # ShuffleTask collection score remain deliberately separate.
   - issue: 145
 
+  # Add the bounded SecondBrain-side Streamline adapter. #148 consumes Streamline
+  # #21 only after Levi alignment permits that product direction, exposes the
+  # minimum summary/ready-work/acknowledgement surface needed by #145/#144/#147,
+  # and contains no ShuffleTask dependency or destination-specific scheduling.
+  - issue: 148
+
   # Search Core and enabled modules with source ownership, restrained metadata,
   # canonical deep links, and safe partial-provider degradation.
   - issue: 54
@@ -97,10 +103,10 @@ priority:
   - issue: 65
 
   # Mediate planning readiness into execution only here, at the composition root.
-  # #147 consumes Streamline#21 and ShuffleTask#356 independently, persists only
-  # minimal correlation/idempotency state, and guarantees there is never a direct
-  # Streamline <-> ShuffleTask dependency. It remains blocked until Levi alignment
-  # permits Streamline#19/#21 and both external contracts are stable.
+  # #147 coordinates #148 and the ShuffleTask host adapter independently, persists
+  # only minimal correlation/idempotency state, and guarantees there is never a
+  # direct Streamline <-> ShuffleTask dependency. It remains blocked until Levi
+  # alignment permits Streamline#19/#21 and both external contracts are stable.
   - issue: 147
 
   # Ask private cited questions and execute only explicitly confirmed proposals.
