@@ -62,6 +62,12 @@ priority:
   - issue: 52
   - issue: 53
 
+  # Bridge portfolio meaning to execution without copying execution state into
+  # Core. #145 links a Workstream to one ShuffleTask TaskCollection (or a direct
+  # task when genuinely simple); Workstream importance and ShuffleTask collection
+  # score remain deliberately separate. Streamline may be linked independently.
+  - issue: 145
+
   # Search Core and enabled modules with source ownership, restrained metadata,
   # canonical deep links, and safe partial-provider degradation.
   - issue: 54
